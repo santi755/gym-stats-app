@@ -9,52 +9,78 @@
             <p v-if="currentUser" class="text-xs text-gray-500">{{ currentUser.email }}</p>
           </div>
           <div class="flex space-x-2">
+            <!-- Home/Daily Board -->
             <router-link 
               to="/" 
               class="p-2 rounded-lg transition-colors"
               :class="$route.path === '/' ? 'bg-blue-100 text-blue-600' : 'text-gray-600 hover:bg-gray-100'"
+              title="Hoy"
             >
               <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2H5a2 2 0 00-2-2z" />
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5a2 2 0 012-2h4a2 2 0 012 2v2H8V5z" />
               </svg>
             </router-link>
+            
+            <!-- Dashboard/Stats -->
             <router-link 
               to="/dashboard" 
               class="p-2 rounded-lg transition-colors"
               :class="$route.path === '/dashboard' ? 'bg-blue-100 text-blue-600' : 'text-gray-600 hover:bg-gray-100'"
+              title="Estadísticas"
             >
               <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
               </svg>
             </router-link>
+            
+            <!-- History -->
             <router-link 
               to="/history" 
               class="p-2 rounded-lg transition-colors"
               :class="$route.path === '/history' ? 'bg-blue-100 text-blue-600' : 'text-gray-600 hover:bg-gray-100'"
+              title="Historial"
             >
               <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
             </router-link>
-            <router-link 
-              to="/auth" 
-              class="p-2 rounded-lg transition-colors"
-              :class="$route.path === '/auth' ? 'bg-blue-100 text-blue-600' : 'text-gray-600 hover:bg-gray-100'"
-            >
-              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-              </svg>
-            </router-link>
+            
+            <!-- Settings -->
             <router-link 
               to="/settings" 
               class="p-2 rounded-lg transition-colors"
               :class="$route.path === '/settings' ? 'bg-blue-100 text-blue-600' : 'text-gray-600 hover:bg-gray-100'"
+              title="Configuración"
             >
               <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
               </svg>
             </router-link>
+            
+            <!-- Login/Logout Button -->
+            <button
+              v-if="!currentUser"
+              @click="$router.push('/auth')"
+              class="p-2 rounded-lg transition-colors text-gray-600 hover:bg-gray-100"
+              title="Iniciar Sesión"
+            >
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1" />
+              </svg>
+            </button>
+            
+            <button
+              v-else
+              @click="logout"
+              class="p-2 rounded-lg transition-colors text-red-600 hover:bg-red-50"
+              title="Cerrar Sesión"
+            >
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+              </svg>
+            </button>
           </div>
         </div>
       </div>
@@ -89,7 +115,7 @@
 
     <!-- Footer -->
     <footer class="max-w-md mx-auto px-4 py-4 text-center text-sm text-gray-500">
-      <p>Gym Stats App v1.0</p>
+      <p>Gym Stats App v2.0</p>
     </footer>
   </div>
 </template>
@@ -108,13 +134,14 @@
 
 <script>
 import { ref, computed, onMounted } from 'vue'
-import { useRoute } from 'vue-router'
-import { isSupabaseConfigured, getCurrentUser } from '@/config/supabase.js'
+import { useRoute, useRouter } from 'vue-router'
+import { isSupabaseConfigured, getCurrentUser, supabase } from '@/config/supabase.js'
 
 export default {
   name: 'App',
   setup() {
     const route = useRoute()
+    const router = useRouter()
     const currentUser = ref(null)
     
     // Show configuration warning if Supabase is not configured
@@ -134,11 +161,23 @@ export default {
       }
     }
 
+    // Logout function
+    const logout = async () => {
+      try {
+        await supabase.auth.signOut()
+        currentUser.value = null
+        router.push('/auth')
+      } catch (error) {
+        console.error('Error logging out:', error)
+      }
+    }
+
     onMounted(loadCurrentUser)
 
     return {
       showConfigWarning,
-      currentUser
+      currentUser,
+      logout
     }
   }
 }
