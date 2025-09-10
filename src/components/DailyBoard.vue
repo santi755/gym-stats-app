@@ -130,15 +130,18 @@ export default {
       })
     })
 
-    const presentCount = computed(() => {
-      const entries = getDateEntries(today.value)
-      return Object.values(entries).filter(points => points > 0).length
-    })
+    const presentCount = ref(0)
+    const todayTotal = ref(0)
 
-    const todayTotal = computed(() => {
-      const entries = getDateEntries(today.value)
-      return Object.values(entries).reduce((sum, points) => sum + points, 0)
-    })
+    const loadTodayStats = async () => {
+      try {
+        const entries = await storage.getDateEntries(today.value)
+        presentCount.value = Object.values(entries).filter(points => points > 0).length
+        todayTotal.value = Object.values(entries).reduce((sum, points) => sum + points, 0)
+      } catch (error) {
+        console.error('Error loading today stats:', error)
+      }
+    }
 
     // Methods
     const loadUsers = async () => {
@@ -161,6 +164,7 @@ export default {
     const refreshData = async () => {
       await loadLeaderboard()
       await loadMyPoints()
+      await loadTodayStats()
     }
 
     const loadMyPoints = async () => {
@@ -206,6 +210,7 @@ export default {
         await loadUsers()
         await loadLeaderboard()
         await loadMyPoints()
+        await loadTodayStats()
       } catch (error) {
         console.error('Error initializing:', error)
         router.push('/auth')
@@ -223,7 +228,8 @@ export default {
       todayTotal,
       refreshData,
       markMyself,
-      clearMyPoints
+      clearMyPoints,
+      loadTodayStats
     }
   }
 }

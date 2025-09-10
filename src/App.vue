@@ -4,7 +4,10 @@
     <nav class="bg-white shadow-sm border-b border-gray-200 sticky top-0 z-10">
       <div class="max-w-md mx-auto px-4 py-3">
         <div class="flex items-center justify-between">
-          <h1 class="text-lg font-semibold text-gray-900">Gym Stats</h1>
+          <div>
+            <h1 class="text-lg font-semibold text-gray-900">Gym Stats</h1>
+            <p v-if="currentUser" class="text-xs text-gray-500">{{ currentUser.email }}</p>
+          </div>
           <div class="flex space-x-2">
             <router-link 
               to="/" 
@@ -104,22 +107,38 @@
 </style>
 
 <script>
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
-import { isSupabaseConfigured } from '@/config/supabase.js'
+import { isSupabaseConfigured, getCurrentUser } from '@/config/supabase.js'
 
 export default {
   name: 'App',
   setup() {
     const route = useRoute()
+    const currentUser = ref(null)
     
     // Show configuration warning if Supabase is not configured
     const showConfigWarning = computed(() => {
       return !isSupabaseConfigured() && route.path !== '/auth'
     })
 
+    // Load current user
+    const loadCurrentUser = async () => {
+      try {
+        if (isSupabaseConfigured()) {
+          currentUser.value = await getCurrentUser()
+        }
+      } catch (error) {
+        console.log('No user logged in')
+        currentUser.value = null
+      }
+    }
+
+    onMounted(loadCurrentUser)
+
     return {
-      showConfigWarning
+      showConfigWarning,
+      currentUser
     }
   }
 }
