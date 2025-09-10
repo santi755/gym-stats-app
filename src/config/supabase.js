@@ -176,18 +176,36 @@ export async function getUserGroups() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) throw new Error('User not authenticated')
   
-  // Get groups where user is either creator or member
-  const { data, error } = await supabase
+  // First, get user's memberships
+  const { data: memberships, error: memberError } = await supabase
+    .from(TABLES.GROUP_MEMBERS)
+    .select('group_id, role')
+    .eq('user_id', user.id)
+  
+  if (memberError) throw memberError
+  
+  if (!memberships || memberships.length === 0) {
+    return []
+  }
+  
+  // Then get the groups for those memberships
+  const groupIds = memberships.map(m => m.group_id)
+  const { data: groups, error: groupError } = await supabase
     .from(TABLES.GROUPS)
-    .select(`
-      *,
-      group_members!inner(role)
-    `)
-    .eq('group_members.user_id', user.id)
+    .select('*')
+    .in('id', groupIds)
     .order('created_at', { ascending: false })
   
-  if (error) throw error
-  return data
+  if (groupError) throw groupError
+  
+  // Combine the data
+  return groups.map(group => {
+    const membership = memberships.find(m => m.group_id === group.id)
+    return {
+      ...group,
+      group_members: [{ role: membership.role }]
+    }
+  })
 }
 
 // Group membership functions

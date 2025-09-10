@@ -90,8 +90,9 @@ router.beforeEach(async (to, from, next) => {
         return
       }
       
-      // User exists, check if they need group setup (except for groups page)
-      if (to.path !== '/groups') {
+      // User exists, check if they need group setup (except for group-related pages)
+      const groupSetupRoutes = ['/groups', '/join-group']
+      if (!groupSetupRoutes.includes(to.path)) {
         try {
           const currentGroup = await storage.getCurrentGroup()
           if (!currentGroup) {

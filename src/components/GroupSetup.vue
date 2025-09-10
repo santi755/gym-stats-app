@@ -126,6 +126,16 @@
         <li>• Puedes cambiar de grupo en cualquier momento desde Configuración</li>
       </ul>
     </div>
+
+    <!-- Logout Option -->
+    <div class="text-center pt-4 border-t border-gray-200">
+      <button
+        @click="logout"
+        class="text-sm text-gray-500 hover:text-gray-700"
+      >
+        🚪 Cerrar Sesión
+      </button>
+    </div>
   </div>
 </template>
 
@@ -133,7 +143,7 @@
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { storage } from '../services/storage.js'
-import { getCurrentUser } from '../config/supabase.js'
+import { getCurrentUser, supabase } from '../config/supabase.js'
 
 export default {
   name: 'GroupSetup',
@@ -266,6 +276,15 @@ export default {
       }
     }
 
+    const logout = async () => {
+      try {
+        await supabase.auth.signOut()
+        router.push('/auth')
+      } catch (err) {
+        console.error('Error logging out:', err)
+      }
+    }
+
     return {
       existingGroups,
       selectedGroupId,
@@ -277,7 +296,8 @@ export default {
       createNewGroup,
       continueToApp,
       copyInviteCode,
-      formatDate
+      formatDate,
+      logout
     }
   }
 }

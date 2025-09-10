@@ -73,12 +73,13 @@
         <p class="text-green-800 font-medium">{{ successMessage }}</p>
       </div>
       <p class="text-green-700 text-sm mt-2">¡Ya puedes empezar a registrar tus entrenamientos!</p>
+      <p class="text-green-600 text-xs mt-1">Redirigiendo automáticamente en 2 segundos...</p>
       
       <button
         @click="goToApp"
         class="mt-3 btn-primary text-sm"
       >
-        Ir a la App
+        Ir a la App Ahora
       </button>
     </div>
 
@@ -162,6 +163,11 @@ export default {
         inviteCode.value = ''
         displayName.value = ''
         color.value = '#3b82f6'
+
+        // Auto-redirect to app after 2 seconds
+        setTimeout(() => {
+          router.push('/')
+        }, 2000)
 
       } catch (err) {
         console.error('Error joining group:', err)
