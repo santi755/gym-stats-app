@@ -1,11 +1,22 @@
-import { supabase, TABLES, getCurrentUser } from '../config/supabase.js'
+import { 
+  supabase, 
+  TABLES, 
+  getCurrentUser, 
+  getUserPreferences, 
+  updateUserPreferences, 
+  createUserPreferences,
+  getGroupMembers,
+  getCurrentMember,
+  createEntry,
+  getGroupEntries
+} from '../config/supabase.js'
 
-// Supabase-only storage service
+// Modern storage service using group members system
 export class StorageService {
   constructor() {
-    this.currentGroupId = null
     this.isOnline = navigator.onLine
     this.setupOnlineListener()
+    this._preferencesCache = null
   }
 
   setupOnlineListener() {
@@ -24,137 +35,156 @@ export class StorageService {
     return !!user
   }
 
+  // Get user preferences with caching
+  async getUserPreferences() {
+    if (!this._preferencesCache) {
+      try {
+        this._preferencesCache = await getUserPreferences()
+      } catch (error) {
+        console.error('Error getting user preferences:', error)
+        // Create default preferences if they don't exist
+        this._preferencesCache = await createUserPreferences()
+      }
+    }
+    return this._preferencesCache
+  }
+
+  // Update preferences and clear cache
+  async updatePreferences(updates) {
+    const updated = await updateUserPreferences(updates)
+    this._preferencesCache = updated
+    return updated
+  }
+
+  // Clear preferences cache
+  clearPreferencesCache() {
+    this._preferencesCache = null
+  }
+
   // Group management
   async createGroup(name, description = '') {
-    const user = await getCurrentUser()
-    if (!user) throw new Error('Usuario no autenticado')
-
-    const { data, error } = await supabase
-      .from(TABLES.GROUPS)
-      .insert({
-        name,
-        description,
-        created_by: user.id
-      })
-      .select()
-      .single()
-
-    if (error) throw error
-    this.currentGroupId = data.id
-    return data
+    const { createGroup } = await import('../config/supabase.js')
+    return await createGroup(name, description)
   }
 
   async getGroups() {
-    const user = await getCurrentUser()
-    if (!user) throw new Error('Usuario no autenticado')
-
-    const { data, error } = await supabase
-      .from(TABLES.GROUPS)
-      .select('*')
-      .eq('created_by', user.id)
-      .order('created_at', { ascending: false })
-
-    if (error) throw error
-    return data
+    const { getUserGroups } = await import('../config/supabase.js')
+    return await getUserGroups()
   }
 
   async setCurrentGroup(groupId) {
-    this.currentGroupId = groupId
-    localStorage.setItem('currentGroupId', groupId)
+    await this.updatePreferences({ current_group_id: groupId })
   }
 
   async getCurrentGroup() {
-    if (!this.currentGroupId) {
-      this.currentGroupId = localStorage.getItem('currentGroupId')
+    const preferences = await this.getUserPreferences()
+    return preferences.current_group_id
+  }
+
+  // Ensure user has a group (create default if needed)
+  async ensureUserHasGroup() {
+    const preferences = await this.getUserPreferences()
+    
+    if (!preferences.current_group_id) {
+      // Check if user has any groups
+      const groups = await this.getGroups()
+      
+      if (groups.length === 0) {
+        // Create a default group
+        const defaultGroup = await this.createGroup('Mi Grupo de Gym', 'Grupo creado automáticamente')
+        return defaultGroup.id
+      } else {
+        // Set the first group as current
+        await this.updatePreferences({ current_group_id: groups[0].id })
+        return groups[0].id
+      }
     }
-    return this.currentGroupId
+    
+    return preferences.current_group_id
   }
 
-  // User management
-  async addUser(name, color = '#3b82f6', avatar = null) {
-    const groupId = await this.getCurrentGroup()
-    if (!groupId) throw new Error('No hay grupo seleccionado')
-
-    const { data, error } = await supabase
-      .from(TABLES.USERS)
-      .insert({
-        group_id: groupId,
-        name,
-        color,
-        avatar
-      })
-      .select()
-      .single()
-
-    if (error) throw error
-    return data
-  }
-
+  // Member management (replaces old user management)
   async getUsers() {
     const groupId = await this.getCurrentGroup()
     if (!groupId) return []
 
-    const { data, error } = await supabase
-      .from(TABLES.USERS)
-      .select('*')
-      .eq('group_id', groupId)
-      .order('created_at', { ascending: true })
+    return await getGroupMembers(groupId)
+  }
 
-    if (error) throw error
-    return data
+  async addUser(name, color = '#3b82f6', avatar = null) {
+    // This is now deprecated - users join via invitations
+    // Keeping for backward compatibility
+    throw new Error('Para agregar miembros, usa el sistema de invitaciones')
   }
 
   async updateUser(userId, updates) {
-    const { data, error } = await supabase
-      .from(TABLES.USERS)
-      .update(updates)
-      .eq('id', userId)
-      .select()
-      .single()
+    // Find member by user_id and update
+    const groupId = await this.getCurrentGroup()
+    if (!groupId) throw new Error('No hay grupo seleccionado')
 
-    if (error) throw error
-    return data
+    const members = await getGroupMembers(groupId)
+    const member = members.find(m => m.user_id === userId)
+    
+    if (!member) throw new Error('Miembro no encontrado')
+
+    const { updateGroupMember } = await import('../config/supabase.js')
+    return await updateGroupMember(member.id, updates)
   }
 
   async deleteUser(userId) {
-    const { error } = await supabase
-      .from(TABLES.USERS)
-      .delete()
-      .eq('id', userId)
+    // Only allow if user is deleting themselves (leaving group)
+    const user = await getCurrentUser()
+    if (user.id !== userId) {
+      throw new Error('Solo puedes eliminar tu propia membresía')
+    }
 
-    if (error) throw error
-    return true
+    const groupId = await this.getCurrentGroup()
+    if (!groupId) throw new Error('No hay grupo seleccionado')
+
+    const { leaveGroup } = await import('../config/supabase.js')
+    return await leaveGroup(groupId)
   }
 
-  // Entry management
+  // Get current user's member record
+  async getCurrentMemberRecord() {
+    const groupId = await this.getCurrentGroup()
+    if (!groupId) return null
+
+    return await getCurrentMember(groupId)
+  }
+
+  // Entry management (updated for new member system)
   async setUserPoints(date, userId, points) {
     const groupId = await this.getCurrentGroup()
     if (!groupId) throw new Error('No hay grupo seleccionado')
 
-    const { data, error } = await supabase
-      .from(TABLES.ENTRIES)
-      .upsert({
-        group_id: groupId,
-        user_id: userId,
-        date,
-        points
-      })
-      .select()
-      .single()
+    // Get current user's member record
+    const currentMember = await this.getCurrentMemberRecord()
+    if (!currentMember) throw new Error('No eres miembro de este grupo')
 
-    if (error) throw error
-    return data
+    // Only allow users to set their own points
+    const user = await getCurrentUser()
+    if (user.id !== userId) {
+      throw new Error('Solo puedes editar tus propios puntos')
+    }
+
+    return await createEntry(groupId, currentMember.id, date, points)
   }
 
   async getUserPoints(date, userId) {
     const groupId = await this.getCurrentGroup()
     if (!groupId) return 0
 
+    // Find member record for this user
+    const members = await getGroupMembers(groupId)
+    const member = members.find(m => m.user_id === userId)
+    if (!member) return 0
+
     const { data, error } = await supabase
       .from(TABLES.ENTRIES)
       .select('points')
       .eq('group_id', groupId)
-      .eq('user_id', userId)
+      .eq('member_id', member.id)
       .eq('date', date)
       .single()
 
@@ -166,18 +196,16 @@ export class StorageService {
     const groupId = await this.getCurrentGroup()
     if (!groupId) return {}
 
-    const { data, error } = await supabase
-      .from(TABLES.ENTRIES)
-      .select('user_id, points')
-      .eq('group_id', groupId)
-      .eq('date', date)
-
-    if (error) throw error
-    
+    const members = await getGroupMembers(groupId)
     const entries = {}
-    data.forEach(entry => {
-      entries[entry.user_id] = entry.points
-    })
+
+    for (const member of members) {
+      const points = await this.getUserPoints(date, member.user_id)
+      if (points > 0) {
+        entries[member.user_id] = points
+      }
+    }
+
     return entries
   }
 
@@ -185,22 +213,17 @@ export class StorageService {
     const groupId = await this.getCurrentGroup()
     if (!groupId) return {}
 
-    const { data, error } = await supabase
-      .from(TABLES.ENTRIES)
-      .select('date, user_id, points')
-      .eq('group_id', groupId)
-      .order('date', { ascending: false })
+    const entries = await getGroupEntries(groupId, '2020-01-01', '2030-12-31')
+    const result = {}
 
-    if (error) throw error
-    
-    const entries = {}
-    data.forEach(entry => {
-      if (!entries[entry.date]) {
-        entries[entry.date] = {}
+    entries.forEach(entry => {
+      if (!result[entry.date]) {
+        result[entry.date] = {}
       }
-      entries[entry.date][entry.user_id] = entry.points
+      result[entry.date][entry.group_members.user_id] = entry.points
     })
-    return entries
+
+    return result
   }
 
   // Statistics
@@ -208,11 +231,16 @@ export class StorageService {
     const groupId = await this.getCurrentGroup()
     if (!groupId) return 0
 
+    // Find member record for this user
+    const members = await getGroupMembers(groupId)
+    const member = members.find(m => m.user_id === userId)
+    if (!member) return 0
+
     const { data, error } = await supabase
       .from(TABLES.ENTRIES)
       .select('points')
       .eq('group_id', groupId)
-      .eq('user_id', userId)
+      .eq('member_id', member.id)
 
     if (error) throw error
     
@@ -224,7 +252,7 @@ export class StorageService {
     const totals = {}
     
     for (const user of users) {
-      totals[user.id] = await this.getUserTotal(user.id)
+      totals[user.user_id] = await this.getUserTotal(user.user_id)
     }
     
     return totals
@@ -236,11 +264,12 @@ export class StorageService {
     
     return users
       .map(user => ({
-        id: user.id,
-        name: user.name,
+        id: user.user_id,
+        name: user.display_name,
         color: user.color,
         avatar: user.avatar,
-        total: totals[user.id] || 0
+        total: totals[user.user_id] || 0,
+        role: user.role
       }))
       .sort((a, b) => b.total - a.total)
   }
@@ -274,10 +303,10 @@ export class StorageService {
           const date = new Date(weekStart)
           date.setDate(weekStart.getDate() + d)
           const dateKey = date.toISOString().split('T')[0]
-          weekPoints += await this.getUserPoints(dateKey, user.id)
+          weekPoints += await this.getUserPoints(dateKey, user.user_id)
         }
-        weekData.users[user.id] = {
-          name: user.name,
+        weekData.users[user.user_id] = {
+          name: user.display_name,
           color: user.color,
           points: weekPoints
         }
@@ -313,12 +342,12 @@ export class StorageService {
         
         while (currentDate <= monthEnd) {
           const dateKey = currentDate.toISOString().split('T')[0]
-          monthPoints += await this.getUserPoints(dateKey, user.id)
+          monthPoints += await this.getUserPoints(dateKey, user.user_id)
           currentDate.setDate(currentDate.getDate() + 1)
         }
         
-        monthData.users[user.id] = {
-          name: user.name,
+        monthData.users[user.user_id] = {
+          name: user.display_name,
           color: user.color,
           points: monthPoints
         }
@@ -397,18 +426,19 @@ export class StorageService {
     const entries = await this.getAllEntries()
     
     const data = {
-      version: 1,
-      users: users.map(user => ({
-        id: user.id,
-        name: user.name,
+      version: 2, // Updated version for new member system
+      members: users.map(user => ({
+        user_id: user.user_id,
+        display_name: user.display_name,
         color: user.color,
-        avatar: user.avatar
+        avatar: user.avatar,
+        role: user.role
       })),
       entries,
       meta: {
         createdAt: new Date().toISOString(),
         lastModified: new Date().toISOString(),
-        source: 'supabase'
+        source: 'supabase-members'
       }
     }
     
@@ -435,9 +465,9 @@ export class StorageService {
     dates.forEach(date => {
       const dayEntries = entries[date]
       Object.keys(dayEntries).forEach(userId => {
-        const user = users.find(u => u.id === userId)
+        const user = users.find(u => u.user_id === userId)
         if (user) {
-          csv += `${date},${user.name},${dayEntries[userId]}\n`
+          csv += `${date},${user.display_name},${dayEntries[userId]}\n`
         }
       })
     })
@@ -455,32 +485,9 @@ export class StorageService {
     return true
   }
 
+  // Import is not supported for member system - users must join via invitations
   async importJSON(file, mode = 'replace') {
-    const text = await file.text()
-    const data = JSON.parse(text)
-    
-    if (mode === 'replace') {
-      // Clear existing data
-      const groupId = await this.getCurrentGroup()
-      if (groupId) {
-        await supabase.from(TABLES.ENTRIES).delete().eq('group_id', groupId)
-        await supabase.from(TABLES.USERS).delete().eq('group_id', groupId)
-      }
-    }
-
-    // Import users
-    for (const user of data.users) {
-      await this.addUser(user.name, user.color, user.avatar)
-    }
-
-    // Import entries
-    for (const [date, dayEntries] of Object.entries(data.entries)) {
-      for (const [userId, points] of Object.entries(dayEntries)) {
-        await this.setUserPoints(date, userId, points)
-      }
-    }
-
-    return true
+    throw new Error('La importación no está disponible con el sistema de invitaciones. Los usuarios deben unirse mediante códigos de invitación.')
   }
 
   // Check if data exists
@@ -489,13 +496,20 @@ export class StorageService {
     return users.length > 0
   }
 
-  // Clear all data
+  // Clear all data - only clears current user's entries
   async clearAllData() {
     const groupId = await this.getCurrentGroup()
-    if (groupId) {
-      await supabase.from(TABLES.ENTRIES).delete().eq('group_id', groupId)
-      await supabase.from(TABLES.USERS).delete().eq('group_id', groupId)
+    const currentMember = await this.getCurrentMemberRecord()
+    
+    if (groupId && currentMember) {
+      // Only delete current user's entries
+      await supabase
+        .from(TABLES.ENTRIES)
+        .delete()
+        .eq('group_id', groupId)
+        .eq('member_id', currentMember.id)
     }
+    
     return true
   }
 
@@ -514,8 +528,27 @@ export class StorageService {
     return {
       useSupabase: true,
       isOnline: this.isOnline,
-      configured: true
+      configured: true,
+      system: 'members'
     }
+  }
+
+  // Legacy compatibility methods
+  async getSelectedGymUser() {
+    // In new system, selected user is always current user
+    const user = await getCurrentUser()
+    return user?.id || null
+  }
+
+  async setSelectedGymUser(userId) {
+    // In new system, users can only manage their own data
+    // This is kept for compatibility but doesn't do anything
+    return true
+  }
+
+  async getSelectedGymUserData() {
+    // Return current user's member data
+    return await this.getCurrentMemberRecord()
   }
 }
 

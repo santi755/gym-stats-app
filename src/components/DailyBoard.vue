@@ -8,30 +8,36 @@
 
     <!-- Quick actions -->
     <div class="card">
-      <h3 class="font-semibold mb-3">Acciones Rápidas</h3>
+      <h3 class="font-semibold mb-3">Mi Entrenamiento de Hoy</h3>
       <div class="flex gap-2">
         <button
-          @click="markAllPresent"
+          @click="markMyself"
           class="flex-1 btn-primary"
+          :disabled="myPointsToday > 0"
         >
-          Marcar Todos Presentes
+          {{ myPointsToday > 0 ? '¡Ya registrado!' : '¡Fui al gym!' }}
         </button>
         <button
-          @click="clearAllPoints"
+          @click="clearMyPoints"
           class="flex-1 btn-secondary"
+          :disabled="myPointsToday === 0"
         >
-          Limpiar Todo
+          Deshacer
         </button>
       </div>
+      <p class="text-xs text-gray-600 mt-2 text-center">
+        Solo puedes editar tus propios puntos
+      </p>
     </div>
 
     <!-- Users list -->
     <div class="space-y-3">
       <UserRow
         v-for="user in users"
-        :key="user.id"
+        :key="user.user_id || user.id"
         :user="user"
         :date="today"
+        :readonly="user.user_id !== currentUserId && user.id !== currentUserId"
         @points-updated="refreshData"
       />
     </div>
@@ -68,9 +74,9 @@
               class="w-6 h-6 rounded-full flex items-center justify-center text-white text-xs font-medium"
               :style="{ backgroundColor: user.color }"
             >
-              {{ user.name.charAt(0).toUpperCase() }}
+              {{ (user.display_name || user.name).charAt(0).toUpperCase() }}
             </div>
-            <span class="font-medium">{{ user.name }}</span>
+            <span class="font-medium">{{ user.display_name || user.name }}</span>
           </div>
           <span class="font-semibold text-gray-900">{{ user.total }} pts</span>
         </div>
@@ -110,6 +116,8 @@ export default {
     const users = ref([])
     const today = ref('')
     const leaderboard = ref([])
+    const currentUserId = ref('')
+    const myPointsToday = ref(0)
 
     // Computed properties
     const formattedDate = computed(() => {
@@ -150,32 +158,35 @@ export default {
       }
     }
 
-    const refreshData = () => {
-      loadLeaderboard()
+    const refreshData = async () => {
+      await loadLeaderboard()
+      await loadMyPoints()
     }
 
-    const markAllPresent = async () => {
-      if (confirm('¿Marcar a todos como presentes (+1 punto cada uno)?')) {
-        try {
-          for (const user of users.value) {
-            await storage.setUserPoints(today.value, user.id, 1)
-          }
-          refreshData()
-        } catch (error) {
-          alert('Error al marcar presentes: ' + error.message)
-        }
+    const loadMyPoints = async () => {
+      try {
+        myPointsToday.value = await storage.getUserPoints(today.value, currentUserId.value)
+      } catch (error) {
+        console.error('Error loading my points:', error)
       }
     }
 
-    const clearAllPoints = async () => {
-      if (confirm('¿Limpiar todos los puntos de hoy?')) {
+    const markMyself = async () => {
+      try {
+        await storage.setUserPoints(today.value, currentUserId.value, 1)
+        await refreshData()
+      } catch (error) {
+        alert('Error al registrar entrenamiento: ' + error.message)
+      }
+    }
+
+    const clearMyPoints = async () => {
+      if (confirm('¿Deshacer tu registro de hoy?')) {
         try {
-          for (const user of users.value) {
-            await storage.setUserPoints(today.value, user.id, 0)
-          }
-          refreshData()
+          await storage.setUserPoints(today.value, currentUserId.value, 0)
+          await refreshData()
         } catch (error) {
-          alert('Error al limpiar puntos: ' + error.message)
+          alert('Error al deshacer registro: ' + error.message)
         }
       }
     }
@@ -183,14 +194,20 @@ export default {
     // Lifecycle
     onMounted(async () => {
       try {
-        // Note: Authentication is now handled by router guards
-        // No need to check user here as the router ensures we have a valid user
+        // Get current user
+        const user = await getCurrentUser()
+        if (!user) {
+          router.push('/auth')
+          return
+        }
+        currentUserId.value = user.id
+        
         today.value = storage.getTodayKey()
         await loadUsers()
         await loadLeaderboard()
+        await loadMyPoints()
       } catch (error) {
         console.error('Error initializing:', error)
-        // If there's an error, redirect to auth
         router.push('/auth')
       }
     })
@@ -199,12 +216,14 @@ export default {
       users,
       today,
       leaderboard,
+      currentUserId,
+      myPointsToday,
       formattedDate,
       presentCount,
       todayTotal,
       refreshData,
-      markAllPresent,
-      clearAllPoints
+      markMyself,
+      clearMyPoints
     }
   }
 }

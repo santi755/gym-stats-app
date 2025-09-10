@@ -177,9 +177,9 @@ export default {
 
         success.value = '¡Sesión iniciada correctamente!'
         
-        // Redirect to home after successful login
+        // Redirect to groups setup after successful login
         setTimeout(() => {
-          router.push('/')
+          router.push('/groups')
         }, 1000)
 
       } catch (err) {
@@ -223,7 +223,7 @@ export default {
     }
 
     const useOfflineMode = () => {
-      router.push('/')
+      router.push('/groups')
     }
 
     // Note: Authentication check is now handled by router guards

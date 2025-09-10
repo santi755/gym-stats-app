@@ -10,15 +10,28 @@ import History from '@/components/History.vue'
 import Settings from '@/components/Settings.vue'
 import Dashboard from '@/components/Dashboard.vue'
 import Auth from '@/components/Auth.vue'
+import GroupSetup from '@/components/GroupSetup.vue'
+import JoinGroup from '@/components/JoinGroup.vue'
 
 // Import auth utilities
 import { getCurrentUser, isSupabaseConfigured } from '@/config/supabase.js'
+import { storage } from '@/services/storage.js'
 
 // Router configuration
 const routes = [
   { 
     path: '/', 
     component: DailyBoard,
+    meta: { requiresAuth: true }
+  },
+  { 
+    path: '/groups', 
+    component: GroupSetup,
+    meta: { requiresAuth: true }
+  },
+  { 
+    path: '/join-group', 
+    component: JoinGroup,
     meta: { requiresAuth: true }
   },
   { 
@@ -53,7 +66,7 @@ const router = createRouter({
   routes
 })
 
-// Navigation guard to handle authentication
+// Navigation guard to handle authentication and group setup
 router.beforeEach(async (to, from, next) => {
   // Check if Supabase is configured
   if (!isSupabaseConfigured()) {
@@ -76,7 +89,25 @@ router.beforeEach(async (to, from, next) => {
         next('/auth')
         return
       }
-      // User exists, allow navigation
+      
+      // User exists, check if they need group setup (except for groups page)
+      if (to.path !== '/groups') {
+        try {
+          const currentGroup = await storage.getCurrentGroup()
+          if (!currentGroup) {
+            // No group selected, redirect to group setup
+            next('/groups')
+            return
+          }
+        } catch (error) {
+          console.error('Error checking group:', error)
+          // If there's an error checking groups, go to group setup
+          next('/groups')
+          return
+        }
+      }
+      
+      // User exists and has group (or is going to groups page), allow navigation
       next()
     } catch (error) {
       console.error('Auth check failed:', error)
@@ -88,9 +119,21 @@ router.beforeEach(async (to, from, next) => {
       try {
         const user = await getCurrentUser()
         if (user) {
-          // User is already authenticated, redirect to home
-          next('/')
-          return
+          // User is already authenticated, check if they have a group
+          try {
+            const currentGroup = await storage.getCurrentGroup()
+            if (!currentGroup) {
+              next('/groups')
+              return
+            }
+            // User has group, redirect to home
+            next('/')
+            return
+          } catch (error) {
+            // Error checking group, go to group setup
+            next('/groups')
+            return
+          }
         }
       } catch (error) {
         console.error('Auth check failed:', error)

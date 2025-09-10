@@ -65,37 +65,35 @@
       </div>
     </div>
 
-    <!-- Current user selection -->
+    <!-- Current Members -->
     <div v-if="users.length > 0" class="card">
-      <h3 class="text-lg font-semibold mb-4">¿Quién eres tú?</h3>
-      <p class="text-sm text-gray-600 mb-4">Selecciona tu nombre para que la app te reconozca automáticamente.</p>
+      <h3 class="text-lg font-semibold mb-4">Miembros del Grupo</h3>
+      <p class="text-sm text-gray-600 mb-4">Estos son todos los miembros actuales del grupo.</p>
       
       <div class="space-y-2">
-        <label
+        <div
           v-for="user in users"
-          :key="user.id"
-          class="flex items-center p-3 border rounded-lg cursor-pointer hover:bg-gray-50"
-          :class="currentUserId === user.id ? 'border-blue-500 bg-blue-50' : 'border-gray-200'"
+          :key="user.user_id"
+          class="flex items-center p-3 border rounded-lg"
+          :class="user.user_id === currentUserId ? 'border-blue-500 bg-blue-50' : 'border-gray-200'"
         >
-          <input
-            v-model="currentUserId"
-            type="radio"
-            :value="user.id"
-            class="sr-only"
-          />
           <div
             class="w-8 h-8 rounded-full flex items-center justify-center text-white font-medium text-sm mr-3"
             :style="{ backgroundColor: user.color }"
           >
-            {{ user.name.charAt(0).toUpperCase() }}
+            {{ user.display_name.charAt(0).toUpperCase() }}
           </div>
-          <span class="font-medium">{{ user.name }}</span>
-        </label>
+          <div class="flex-1">
+            <span class="font-medium">{{ user.display_name }}</span>
+            <span v-if="user.user_id === currentUserId" class="text-xs text-blue-600 ml-2">(Tú)</span>
+            <span v-if="user.role === 'owner'" class="text-xs text-green-600 ml-2">(Creador)</span>
+          </div>
+        </div>
       </div>
     </div>
 
     <!-- Start button -->
-    <div v-if="users.length > 0 && currentUserId" class="text-center">
+    <div v-if="users.length > 0" class="text-center">
       <button
         @click="startApp"
         class="btn-primary text-lg px-8 py-3"
@@ -108,9 +106,10 @@
     <div class="card bg-blue-50 border-blue-200">
       <h4 class="font-semibold text-blue-900 mb-2">💡 Consejos:</h4>
       <ul class="text-sm text-blue-800 space-y-1">
-        <li>• Puedes agregar hasta 6 participantes</li>
-        <li>• Los datos se guardan en tu dispositivo</li>
-        <li>• Usa la función de exportar para hacer respaldos</li>
+        <li>• Solo tú puedes editar tus propios puntos</li>
+        <li>• Los datos se sincronizan en la nube</li>
+        <li>• Invita a más personas con el código del grupo</li>
+        <li>• Compite con tus amigos en el leaderboard</li>
       </ul>
     </div>
   </div>
@@ -139,9 +138,13 @@ export default {
           return
         }
         
+        // Load group members
         const userList = await storage.getUsers()
         users.value = userList
-        currentUserId.value = localStorage.getItem('currentUserId') || ''
+        
+        // Get current user ID
+        const currentUser = await getCurrentUser()
+        currentUserId.value = currentUser?.id || ''
       } catch (error) {
         console.error('Error loading users:', error)
         router.push('/auth')
@@ -149,37 +152,26 @@ export default {
     })
 
     const addUser = async () => {
-      if (!newUserName.value.trim()) return
-      
-      try {
-        const user = await storage.addUser(newUserName.value.trim(), newUserColor.value)
-        users.value.push(user)
-        newUserName.value = ''
-        newUserColor.value = '#3b82f6'
-      } catch (error) {
-        alert('Error al agregar usuario: ' + error.message)
-      }
+      // Users now join via invitations
+      alert('Los usuarios se unen mediante códigos de invitación. Ve a Configuración para ver el código de tu grupo.')
     }
 
     const removeUser = async (userId) => {
-      if (confirm('¿Estás seguro de que quieres eliminar este participante?')) {
-        try {
-          await storage.deleteUser(userId)
-          users.value = users.value.filter(u => u.id !== userId)
-          
-          if (currentUserId.value === userId) {
-            currentUserId.value = ''
+      if (userId === currentUserId.value) {
+        if (confirm('¿Estás seguro de que quieres salir de este grupo?')) {
+          try {
+            await storage.deleteUser(userId)
+            router.push('/groups')
+          } catch (error) {
+            alert('Error al salir del grupo: ' + error.message)
           }
-        } catch (error) {
-          alert('Error al eliminar usuario: ' + error.message)
         }
+      } else {
+        alert('Solo puedes salir del grupo tú mismo. Los otros miembros deben salir por su cuenta.')
       }
     }
 
-    const startApp = () => {
-      if (currentUserId.value) {
-        localStorage.setItem('currentUserId', currentUserId.value)
-      }
+    const startApp = async () => {
       router.push('/')
     }
 

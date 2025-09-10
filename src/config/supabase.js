@@ -24,9 +24,12 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
 
 // Database schema constants
 export const TABLES = {
-  USERS: 'gym_users',
+  USERS: 'gym_users', // Deprecated - for backward compatibility
   ENTRIES: 'gym_entries',
-  GROUPS: 'gym_groups'
+  GROUPS: 'gym_groups',
+  GROUP_MEMBERS: 'group_members',
+  GROUP_INVITATIONS: 'group_invitations',
+  USER_PREFERENCES: 'user_preferences'
 }
 
 // Check if Supabase is configured
@@ -94,7 +97,60 @@ export function onAuthStateChange(callback) {
   return supabase.auth.onAuthStateChange(callback)
 }
 
-// Database utility functions
+// User Preferences functions
+export async function getUserPreferences() {
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) throw new Error('User not authenticated')
+  
+  const { data, error } = await supabase
+    .from(TABLES.USER_PREFERENCES)
+    .select('*')
+    .eq('auth_user_id', user.id)
+    .single()
+  
+  if (error && error.code === 'PGRST116') {
+    // No preferences found, create default ones
+    return await createUserPreferences()
+  }
+  
+  if (error) throw error
+  return data
+}
+
+export async function createUserPreferences(currentGroupId = null, selectedGymUserId = null) {
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) throw new Error('User not authenticated')
+  
+  const { data, error } = await supabase
+    .from(TABLES.USER_PREFERENCES)
+    .insert({
+      auth_user_id: user.id,
+      current_group_id: currentGroupId,
+      selected_gym_user_id: selectedGymUserId
+    })
+    .select()
+    .single()
+  
+  if (error) throw error
+  return data
+}
+
+export async function updateUserPreferences(updates) {
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) throw new Error('User not authenticated')
+  
+  const { data, error } = await supabase
+    .from(TABLES.USER_PREFERENCES)
+    .update(updates)
+    .eq('auth_user_id', user.id)
+    .select()
+    .single()
+  
+  if (error) throw error
+  return data
+}
+
+// Group functions
 export async function createGroup(name, description = '') {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) throw new Error('User not authenticated')
@@ -106,6 +162,13 @@ export async function createGroup(name, description = '') {
     .single()
   
   if (error) throw error
+  
+  // Automatically add creator as owner member
+  await joinGroup(data.id, user.email?.split('@')[0] || 'Owner', '#3b82f6', 'owner')
+  
+  // Set this as the current group in preferences
+  await updateUserPreferences({ current_group_id: data.id })
+  
   return data
 }
 
@@ -113,16 +176,202 @@ export async function getUserGroups() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) throw new Error('User not authenticated')
   
+  // Get groups where user is either creator or member
   const { data, error } = await supabase
     .from(TABLES.GROUPS)
-    .select('*')
-    .eq('created_by', user.id)
+    .select(`
+      *,
+      group_members!inner(role)
+    `)
+    .eq('group_members.user_id', user.id)
     .order('created_at', { ascending: false })
   
   if (error) throw error
   return data
 }
 
+// Group membership functions
+export async function joinGroup(groupId, displayName, color = '#3b82f6', role = 'member') {
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) throw new Error('User not authenticated')
+  
+  const { data, error } = await supabase
+    .from(TABLES.GROUP_MEMBERS)
+    .insert({
+      group_id: groupId,
+      user_id: user.id,
+      display_name: displayName,
+      color,
+      role
+    })
+    .select()
+    .single()
+  
+  if (error) throw error
+  return data
+}
+
+export async function joinGroupByInviteCode(inviteCode, displayName, color = '#3b82f6') {
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) throw new Error('User not authenticated')
+  
+  // Find group by invite code
+  const { data: group, error: groupError } = await supabase
+    .from(TABLES.GROUPS)
+    .select('id, name')
+    .eq('invite_code', inviteCode.toUpperCase())
+    .single()
+  
+  if (groupError) throw new Error('Código de invitación inválido')
+  
+  // Check if user is already a member
+  const { data: existingMember } = await supabase
+    .from(TABLES.GROUP_MEMBERS)
+    .select('id')
+    .eq('group_id', group.id)
+    .eq('user_id', user.id)
+    .single()
+  
+  if (existingMember) {
+    throw new Error('Ya eres miembro de este grupo')
+  }
+  
+  // Join the group
+  const member = await joinGroup(group.id, displayName, color, 'member')
+  
+  // Set as current group
+  await updateUserPreferences({ current_group_id: group.id })
+  
+  return { group, member }
+}
+
+export async function getGroupMembers(groupId) {
+  const { data, error } = await supabase
+    .from(TABLES.GROUP_MEMBERS)
+    .select('*')
+    .eq('group_id', groupId)
+    .order('joined_at', { ascending: true })
+  
+  if (error) throw error
+  return data
+}
+
+export async function updateGroupMember(memberId, updates) {
+  const { data, error } = await supabase
+    .from(TABLES.GROUP_MEMBERS)
+    .update(updates)
+    .eq('id', memberId)
+    .select()
+    .single()
+  
+  if (error) throw error
+  return data
+}
+
+export async function leaveGroup(groupId) {
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) throw new Error('User not authenticated')
+  
+  const { error } = await supabase
+    .from(TABLES.GROUP_MEMBERS)
+    .delete()
+    .eq('group_id', groupId)
+    .eq('user_id', user.id)
+  
+  if (error) throw error
+  
+  // Clear current group if leaving current group
+  const preferences = await getUserPreferences()
+  if (preferences.current_group_id === groupId) {
+    await updateUserPreferences({ current_group_id: null })
+  }
+  
+  return true
+}
+
+// Group invitation functions
+export async function createGroupInvitation(groupId, email = null) {
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) throw new Error('User not authenticated')
+  
+  // Get group invite code
+  const { data: group } = await supabase
+    .from(TABLES.GROUPS)
+    .select('invite_code')
+    .eq('id', groupId)
+    .single()
+  
+  const { data, error } = await supabase
+    .from(TABLES.GROUP_INVITATIONS)
+    .insert({
+      group_id: groupId,
+      invited_by: user.id,
+      email,
+      invite_code: group.invite_code
+    })
+    .select()
+    .single()
+  
+  if (error) throw error
+  return data
+}
+
+export async function getGroupInvitations(groupId) {
+  const { data, error } = await supabase
+    .from(TABLES.GROUP_INVITATIONS)
+    .select('*')
+    .eq('group_id', groupId)
+    .order('created_at', { ascending: false })
+  
+  if (error) throw error
+  return data
+}
+
+// Entry functions (updated for new member system)
+export async function createEntry(groupId, memberId, date, points = 0) {
+  const { data, error } = await supabase
+    .from(TABLES.ENTRIES)
+    .upsert([{ group_id: groupId, member_id: memberId, date, points }])
+    .select()
+    .single()
+  
+  if (error) throw error
+  return data
+}
+
+export async function getGroupEntries(groupId, startDate, endDate) {
+  const { data, error } = await supabase
+    .from(TABLES.ENTRIES)
+    .select(`
+      *,
+      group_members(display_name, color, user_id)
+    `)
+    .eq('group_id', groupId)
+    .gte('date', startDate)
+    .lte('date', endDate)
+    .order('date', { ascending: true })
+  
+  if (error) throw error
+  return data
+}
+
+// Get current user's member record for a group
+export async function getCurrentMember(groupId) {
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) throw new Error('User not authenticated')
+  
+  const { data, error } = await supabase
+    .from(TABLES.GROUP_MEMBERS)
+    .select('*')
+    .eq('group_id', groupId)
+    .eq('user_id', user.id)
+    .single()
+  
+  if (error) throw error
+  return data
+}
+
+// Legacy functions for backward compatibility
 export async function createUser(groupId, name, color = '#3b82f6') {
   const { data, error } = await supabase
     .from(TABLES.USERS)
@@ -140,33 +389,6 @@ export async function getGroupUsers(groupId) {
     .select('*')
     .eq('group_id', groupId)
     .order('created_at', { ascending: true })
-  
-  if (error) throw error
-  return data
-}
-
-export async function createEntry(groupId, userId, date, points = 0) {
-  const { data, error } = await supabase
-    .from(TABLES.ENTRIES)
-    .upsert([{ group_id: groupId, user_id: userId, date, points }])
-    .select()
-    .single()
-  
-  if (error) throw error
-  return data
-}
-
-export async function getGroupEntries(groupId, startDate, endDate) {
-  const { data, error } = await supabase
-    .from(TABLES.ENTRIES)
-    .select(`
-      *,
-      ${TABLES.USERS}(name, color)
-    `)
-    .eq('group_id', groupId)
-    .gte('date', startDate)
-    .lte('date', endDate)
-    .order('date', { ascending: true })
   
   if (error) throw error
   return data

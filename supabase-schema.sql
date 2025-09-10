@@ -1,141 +1,199 @@
--- Gym Stats App - Supabase Database Schema
+-- Gym Stats App - Supabase Database Schema (FULL RESET)
 -- Run this SQL in your Supabase SQL editor
 
--- Enable Row Level Security
-ALTER DATABASE postgres SET "app.jwt_secret" TO 'your-jwt-secret';
-
--- Create gym_groups table
-CREATE TABLE IF NOT EXISTS gym_groups (
-  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-  name TEXT NOT NULL,
-  description TEXT,
-  created_by UUID REFERENCES auth.users(id) ON DELETE CASCADE,
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+-- Create the gym_groups table
+create table gym_groups (
+  id uuid default gen_random_uuid() primary key,
+  name text not null,
+  description text default '',
+  invite_code text unique not null default encode(gen_random_bytes(6), 'base64'),
+  created_by uuid references auth.users(id) on delete cascade,
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null,
+  updated_at timestamp with time zone default timezone('utc'::text, now()) not null
 );
 
--- Create gym_users table
-CREATE TABLE IF NOT EXISTS gym_users (
-  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-  group_id UUID REFERENCES gym_groups(id) ON DELETE CASCADE,
-  name TEXT NOT NULL,
-  color TEXT DEFAULT '#3b82f6',
-  avatar TEXT,
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+-- Create group_members table (users that belong to groups)
+create table group_members (
+  id uuid default gen_random_uuid() primary key,
+  group_id uuid references gym_groups(id) on delete cascade not null,
+  user_id uuid references auth.users(id) on delete cascade not null,
+  display_name text not null,
+  color text default '#3b82f6',
+  avatar text,
+  role text default 'member' check (role in ('owner', 'admin', 'member')),
+  joined_at timestamp with time zone default timezone('utc'::text, now()) not null,
+  unique(group_id, user_id)
 );
 
--- Create gym_entries table
-CREATE TABLE IF NOT EXISTS gym_entries (
-  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-  group_id UUID REFERENCES gym_groups(id) ON DELETE CASCADE,
-  user_id UUID REFERENCES gym_users(id) ON DELETE CASCADE,
-  date DATE NOT NULL,
-  points INTEGER DEFAULT 0,
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-  UNIQUE(group_id, user_id, date)
+-- Create the gym_entries table (daily points) - now references group_members instead of gym_users
+create table gym_entries (
+  id uuid default gen_random_uuid() primary key,
+  group_id uuid references gym_groups(id) on delete cascade not null,
+  member_id uuid references group_members(id) on delete cascade not null,
+  date date not null,
+  points integer default 0,
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null,
+  updated_at timestamp with time zone default timezone('utc'::text, now()) not null,
+  unique(group_id, member_id, date)
 );
+
+-- Create group_invitations table
+create table group_invitations (
+  id uuid default gen_random_uuid() primary key,
+  group_id uuid references gym_groups(id) on delete cascade not null,
+  invited_by uuid references auth.users(id) on delete cascade not null,
+  email text,
+  invite_code text not null,
+  status text default 'pending' check (status in ('pending', 'accepted', 'expired')),
+  expires_at timestamp with time zone default (timezone('utc'::text, now()) + interval '7 days'),
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null,
+  used_at timestamp with time zone
+);
+
+-- Keep gym_users table for backward compatibility (deprecated)
+create table gym_users (
+  id uuid default gen_random_uuid() primary key,
+  group_id uuid references gym_groups(id) on delete cascade not null,
+  name text not null,
+  color text default '#3b82f6',
+  avatar text,
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null,
+  updated_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+
+-- Create user_preferences table to store current group and selected user
+create table user_preferences (
+  id uuid default gen_random_uuid() primary key,
+  auth_user_id uuid references auth.users(id) on delete cascade unique not null,
+  current_group_id uuid references gym_groups(id) on delete set null,
+  selected_gym_user_id uuid references gym_users(id) on delete set null,
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null,
+  updated_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+
+-- Enable Row Level Security (RLS) - FIRST enable RLS, then create policies
+alter table gym_groups enable row level security;
+alter table group_members enable row level security;
+alter table gym_entries enable row level security;
+alter table group_invitations enable row level security;
+alter table gym_users enable row level security;
+alter table user_preferences enable row level security;
+
+-- Create policies for gym_groups (simplified first)
+create policy "Users can create their own groups" on gym_groups for insert with check (auth.uid() = created_by);
+create policy "Group owners can update their groups" on gym_groups for update using (auth.uid() = created_by);
+create policy "Group owners can delete their groups" on gym_groups for delete using (auth.uid() = created_by);
+
+-- Create policies for group_members (basic first)
+create policy "Users can join groups via invitations" on group_members for insert with check (auth.uid() = user_id);
+create policy "Users can update their own membership" on group_members for update using (auth.uid() = user_id);
+create policy "Users can leave groups" on group_members for delete using (auth.uid() = user_id);
+
+-- Now create the complex policies that reference other tables
+create policy "Users can view groups they belong to" on gym_groups for select using (
+  auth.uid() = created_by OR 
+  exists (select 1 from group_members where group_members.group_id = gym_groups.id and group_members.user_id = auth.uid())
+);
+
+create policy "Users can view members of groups they belong to" on group_members for select using (
+  exists (select 1 from group_members gm where gm.group_id = group_members.group_id and gm.user_id = auth.uid())
+);
+
+create policy "Group owners can manage members" on group_members for all using (
+  exists (select 1 from gym_groups where gym_groups.id = group_members.group_id and gym_groups.created_by = auth.uid())
+);
+
+-- Create policies for gym_entries
+create policy "Users can view entries in their groups" on gym_entries for select using (
+  exists (select 1 from group_members where group_members.group_id = gym_entries.group_id and group_members.user_id = auth.uid())
+);
+create policy "Users can create their own entries" on gym_entries for insert with check (
+  exists (select 1 from group_members where group_members.id = gym_entries.member_id and group_members.user_id = auth.uid())
+);
+create policy "Users can update their own entries" on gym_entries for update using (
+  exists (select 1 from group_members where group_members.id = gym_entries.member_id and group_members.user_id = auth.uid())
+);
+create policy "Users can delete their own entries" on gym_entries for delete using (
+  exists (select 1 from group_members where group_members.id = gym_entries.member_id and group_members.user_id = auth.uid())
+);
+
+-- Create policies for group_invitations
+create policy "Users can view invitations for their groups" on group_invitations for select using (
+  exists (select 1 from gym_groups where gym_groups.id = group_invitations.group_id and gym_groups.created_by = auth.uid())
+);
+create policy "Group owners can create invitations" on group_invitations for insert with check (
+  exists (select 1 from gym_groups where gym_groups.id = group_invitations.group_id and gym_groups.created_by = auth.uid())
+);
+create policy "Group owners can update invitations" on group_invitations for update using (
+  exists (select 1 from gym_groups where gym_groups.id = group_invitations.group_id and gym_groups.created_by = auth.uid())
+);
+
+-- Create policies for gym_users (backward compatibility)
+create policy "Users can view users in their groups" on gym_users for select using (
+  exists (select 1 from gym_groups where gym_groups.id = gym_users.group_id and gym_groups.created_by = auth.uid())
+);
+create policy "Users can create users in their groups" on gym_users for insert with check (
+  exists (select 1 from gym_groups where gym_groups.id = gym_users.group_id and gym_groups.created_by = auth.uid())
+);
+create policy "Users can update users in their groups" on gym_users for update using (
+  exists (select 1 from gym_groups where gym_groups.id = gym_users.group_id and gym_groups.created_by = auth.uid())
+);
+create policy "Users can delete users in their groups" on gym_users for delete using (
+  exists (select 1 from gym_groups where gym_groups.id = gym_users.group_id and gym_groups.created_by = auth.uid())
+);
+
+-- Create policies for user_preferences
+create policy "Users can view their own preferences" on user_preferences for select using (auth.uid() = auth_user_id);
+create policy "Users can create their own preferences" on user_preferences for insert with check (auth.uid() = auth_user_id);
+create policy "Users can update their own preferences" on user_preferences for update using (auth.uid() = auth_user_id);
+create policy "Users can delete their own preferences" on user_preferences for delete using (auth.uid() = auth_user_id);
 
 -- Create indexes for better performance
-CREATE INDEX IF NOT EXISTS idx_gym_entries_group_date ON gym_entries(group_id, date);
-CREATE INDEX IF NOT EXISTS idx_gym_entries_user_date ON gym_entries(user_id, date);
-CREATE INDEX IF NOT EXISTS idx_gym_users_group ON gym_users(group_id);
+create index idx_gym_groups_invite_code on gym_groups(invite_code);
+create index idx_group_members_group_id on group_members(group_id);
+create index idx_group_members_user_id on group_members(user_id);
+create index idx_group_members_group_user on group_members(group_id, user_id);
+create index idx_gym_entries_group_id on gym_entries(group_id);
+create index idx_gym_entries_member_id on gym_entries(member_id);
+create index idx_gym_entries_date on gym_entries(date);
+create index idx_gym_entries_group_member_date on gym_entries(group_id, member_id, date);
+create index idx_group_invitations_invite_code on group_invitations(invite_code);
+create index idx_group_invitations_group_id on group_invitations(group_id);
+create index idx_gym_users_group_id on gym_users(group_id);
+create index idx_user_preferences_auth_user_id on user_preferences(auth_user_id);
 
--- Enable Row Level Security (RLS)
-ALTER TABLE gym_groups ENABLE ROW LEVEL SECURITY;
-ALTER TABLE gym_users ENABLE ROW LEVEL SECURITY;
-ALTER TABLE gym_entries ENABLE ROW LEVEL SECURITY;
-
--- RLS Policies for gym_groups
-CREATE POLICY "Users can view their own groups" ON gym_groups
-  FOR SELECT USING (auth.uid() = created_by);
-
-CREATE POLICY "Users can create groups" ON gym_groups
-  FOR INSERT WITH CHECK (auth.uid() = created_by);
-
-CREATE POLICY "Users can update their own groups" ON gym_groups
-  FOR UPDATE USING (auth.uid() = created_by);
-
-CREATE POLICY "Users can delete their own groups" ON gym_groups
-  FOR DELETE USING (auth.uid() = created_by);
-
--- RLS Policies for gym_users
-CREATE POLICY "Users can view users in their groups" ON gym_users
-  FOR SELECT USING (
-    group_id IN (
-      SELECT id FROM gym_groups WHERE created_by = auth.uid()
-    )
-  );
-
-CREATE POLICY "Users can create users in their groups" ON gym_users
-  FOR INSERT WITH CHECK (
-    group_id IN (
-      SELECT id FROM gym_groups WHERE created_by = auth.uid()
-    )
-  );
-
-CREATE POLICY "Users can update users in their groups" ON gym_users
-  FOR UPDATE USING (
-    group_id IN (
-      SELECT id FROM gym_groups WHERE created_by = auth.uid()
-    )
-  );
-
-CREATE POLICY "Users can delete users in their groups" ON gym_users
-  FOR DELETE USING (
-    group_id IN (
-      SELECT id FROM gym_groups WHERE created_by = auth.uid()
-    )
-  );
-
--- RLS Policies for gym_entries
-CREATE POLICY "Users can view entries in their groups" ON gym_entries
-  FOR SELECT USING (
-    group_id IN (
-      SELECT id FROM gym_groups WHERE created_by = auth.uid()
-    )
-  );
-
-CREATE POLICY "Users can create entries in their groups" ON gym_entries
-  FOR INSERT WITH CHECK (
-    group_id IN (
-      SELECT id FROM gym_groups WHERE created_by = auth.uid()
-    )
-  );
-
-CREATE POLICY "Users can update entries in their groups" ON gym_entries
-  FOR UPDATE USING (
-    group_id IN (
-      SELECT id FROM gym_groups WHERE created_by = auth.uid()
-    )
-  );
-
-CREATE POLICY "Users can delete entries in their groups" ON gym_entries
-  FOR DELETE USING (
-    group_id IN (
-      SELECT id FROM gym_groups WHERE created_by = auth.uid()
-    )
-  );
-
--- Create updated_at trigger function
-CREATE OR REPLACE FUNCTION update_updated_at_column()
-RETURNS TRIGGER AS $$
-BEGIN
-  NEW.updated_at = NOW();
-  RETURN NEW;
-END;
+-- Create updated_at triggers
+create or replace function update_updated_at_column()
+returns trigger as $$
+begin
+    new.updated_at = timezone('utc'::text, now());
+    return new;
+end;
 $$ language 'plpgsql';
 
--- Create triggers for updated_at
-CREATE TRIGGER update_gym_groups_updated_at 
-  BEFORE UPDATE ON gym_groups 
-  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+create trigger update_gym_groups_updated_at before update on gym_groups for each row execute procedure update_updated_at_column();
+create trigger update_group_members_updated_at before update on group_members for each row execute procedure update_updated_at_column();
+create trigger update_gym_entries_updated_at before update on gym_entries for each row execute procedure update_updated_at_column();
+create trigger update_gym_users_updated_at before update on gym_users for each row execute procedure update_updated_at_column();
+create trigger update_user_preferences_updated_at before update on user_preferences for each row execute procedure update_updated_at_column();
 
-CREATE TRIGGER update_gym_users_updated_at 
-  BEFORE UPDATE ON gym_users 
-  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+-- Function to generate clean invite codes
+create or replace function generate_invite_code()
+returns text as $$
+begin
+    return upper(substring(encode(gen_random_bytes(6), 'base64') from 1 for 8));
+end;
+$$ language 'plpgsql';
 
-CREATE TRIGGER update_gym_entries_updated_at 
-  BEFORE UPDATE ON gym_entries 
-  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+-- Set default invite code generation for groups
+alter table gym_groups alter column invite_code set default generate_invite_code();
+
+-- Success message
+do $$
+begin
+    raise notice '🎉 Database schema created successfully!';
+    raise notice '📊 Tables created: gym_groups, group_members, gym_entries, group_invitations, gym_users, user_preferences';
+    raise notice '🔒 Row Level Security enabled on all tables';
+    raise notice '⚡ Performance indexes created';
+    raise notice '🚀 Ready for the invitation system!';
+end $$;
