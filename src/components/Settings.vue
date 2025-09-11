@@ -84,59 +84,6 @@
       <h3 class="font-semibold mb-4">Usuario Actual</h3>
       <p class="text-sm text-gray-600 mb-3">En el nuevo sistema, automáticamente eres tú mismo.</p>
     </div>
-
-    <!-- Export/Import -->
-    <div class="card">
-      <h3 class="font-semibold mb-4">Exportar/Importar</h3>
-      
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-        <button
-          @click="exportJSON"
-          class="btn-secondary"
-        >
-          📄 Exportar JSON
-        </button>
-        <button
-          @click="exportCSV"
-          class="btn-secondary"
-        >
-          📊 Exportar CSV
-        </button>
-      </div>
-      
-      <p class="text-xs text-gray-500 mt-2">
-        En el sistema de invitaciones, la importación no está disponible. Los usuarios deben unirse mediante códigos.
-      </p>
-    </div>
-
-    <!-- Danger Zone -->
-    <div class="card border-red-200 bg-red-50">
-      <h3 class="font-semibold text-red-900 mb-4">Zona de Peligro</h3>
-      
-      <div class="space-y-3">
-        <button
-          @click="resetAllData"
-          class="w-full btn-danger"
-        >
-          Borrar Mis Datos
-        </button>
-        
-        <p class="text-sm text-red-700">
-          ⚠️ Esto eliminará solo tus entradas de puntos, no afectará a otros miembros del grupo.
-        </p>
-      </div>
-    </div>
-
-    <!-- App Info -->
-    <div class="card bg-gray-50">
-      <h3 class="font-semibold mb-3">Información de la App</h3>
-      <div class="text-sm text-gray-600 space-y-1">
-        <p><strong>Versión:</strong> 2.0.0 (Sistema de Invitaciones)</p>
-        <p><strong>Almacenamiento:</strong> {{ storageMode }}</p>
-        <p><strong>Datos creados:</strong> {{ appInfo.createdAt }}</p>
-        <p><strong>Última modificación:</strong> {{ appInfo.lastModified }}</p>
-      </div>
-    </div>
   </div>
 </template>
 

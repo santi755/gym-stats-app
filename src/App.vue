@@ -86,6 +86,28 @@
       </div>
     </nav>
 
+    <!-- Current Group Info -->
+    <div v-if="currentUser && currentGroupName" class="bg-blue-50 border-b border-blue-200">
+      <div class="max-w-md mx-auto px-4 py-2">
+        <div class="flex items-center justify-between">
+          <div class="flex items-center space-x-2">
+            <svg class="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+            </svg>
+            <span class="text-sm font-medium text-blue-900">Grupo:</span>
+            <span class="text-sm text-blue-800">{{ currentGroupName }}</span>
+          </div>
+          <button
+            @click="$router.push('/settings')"
+            class="text-xs text-blue-600 hover:text-blue-800 transition-colors"
+            title="Cambiar grupo"
+          >
+            Cambiar
+          </button>
+        </div>
+      </div>
+    </div>
+
     <!-- Configuration Warning -->
     <div v-if="showConfigWarning" class="bg-yellow-50 border-l-4 border-yellow-400 p-4 mx-4 my-4 rounded">
       <div class="flex">
@@ -112,11 +134,6 @@
         </transition>
       </router-view>
     </main>
-
-    <!-- Footer -->
-    <footer class="max-w-md mx-auto px-4 py-4 text-center text-sm text-gray-500">
-      <p>Gym Stats App v2.0</p>
-    </footer>
   </div>
 </template>
 
@@ -133,9 +150,10 @@
 </style>
 
 <script>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { isSupabaseConfigured, getCurrentUser, supabase } from '@/config/supabase.js'
+import { storage } from '@/services/storage.js'
 
 export default {
   name: 'App',
@@ -143,6 +161,7 @@ export default {
     const route = useRoute()
     const router = useRouter()
     const currentUser = ref(null)
+    const currentGroupName = ref('')
     
     // Show configuration warning if Supabase is not configured
     const showConfigWarning = computed(() => {
@@ -161,22 +180,53 @@ export default {
       }
     }
 
+    // Load current group name
+    const loadCurrentGroup = async () => {
+      try {
+        if (currentUser.value && isSupabaseConfigured()) {
+          const groups = await storage.getGroups()
+          const currentGroupId = await storage.getCurrentGroup()
+          const currentGroup = groups.find(g => g.id === currentGroupId)
+          currentGroupName.value = currentGroup?.name || ''
+        } else {
+          currentGroupName.value = ''
+        }
+      } catch (error) {
+        console.log('Error loading current group:', error)
+        currentGroupName.value = ''
+      }
+    }
+
     // Logout function
     const logout = async () => {
       try {
         await supabase.auth.signOut()
         currentUser.value = null
+        currentGroupName.value = ''
         router.push('/auth')
       } catch (error) {
         console.error('Error logging out:', error)
       }
     }
 
-    onMounted(loadCurrentUser)
+    // Watch for route changes to reload group info
+    watch(route, () => {
+      if (currentUser.value) {
+        loadCurrentGroup()
+      }
+    })
+
+    onMounted(async () => {
+      await loadCurrentUser()
+      if (currentUser.value) {
+        await loadCurrentGroup()
+      }
+    })
 
     return {
       showConfigWarning,
       currentUser,
+      currentGroupName,
       logout
     }
   }
