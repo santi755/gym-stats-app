@@ -152,8 +152,9 @@
 <script>
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { isSupabaseConfigured, getCurrentUser, supabase } from '@/config/supabase.js'
+import { isSupabaseConfigured, supabase } from '@/config/httpConfig.js'
 import { storage } from '@/services/storage.js'
+import { useUserStore } from '@/stores/UserStore.js'
 
 export default {
   name: 'App',
@@ -162,6 +163,8 @@ export default {
     const router = useRouter()
     const currentUser = ref(null)
     const currentGroupName = ref('')
+    const userStore = useUserStore()
+
     
     // Show configuration warning if Supabase is not configured
     const showConfigWarning = computed(() => {
@@ -172,7 +175,8 @@ export default {
     const loadCurrentUser = async () => {
       try {
         if (isSupabaseConfigured()) {
-          currentUser.value = await getCurrentUser()
+          await userStore.fetchUser()
+          currentUser.value = userStore.getUser
         }
       } catch (error) {
         console.log('No user logged in')
@@ -184,9 +188,7 @@ export default {
     const loadCurrentGroup = async () => {
       try {
         if (currentUser.value && isSupabaseConfigured()) {
-          const groups = await storage.getGroups()
-          const currentGroupId = await storage.getCurrentGroup()
-          const currentGroup = groups.find(g => g.id === currentGroupId)
+          const currentGroup = await storage.getCurrentGroup()
           currentGroupName.value = currentGroup?.name || ''
         } else {
           currentGroupName.value = ''

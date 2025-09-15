@@ -103,7 +103,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { storage } from '../services/storage.js'
-import { getCurrentUser } from '../config/supabase.js'
+import { useUserStore } from '@/stores/UserStore.js'
 import UserRow from './UserRow.vue'
 
 export default {
@@ -113,6 +113,7 @@ export default {
   },
   setup() {
     const router = useRouter()
+    const userStore = useUserStore()
     const users = ref([])
     const today = ref('')
     const leaderboard = ref([])
@@ -199,12 +200,12 @@ export default {
     onMounted(async () => {
       try {
         // Get current user
-        const user = await getCurrentUser()
+        const user = userStore.getUser
         if (!user) {
           router.push('/auth')
           return
         }
-        currentUserId.value = user.id
+        currentUserId.value = userStore.getUser.id
         
         today.value = storage.getTodayKey()
         await loadUsers()

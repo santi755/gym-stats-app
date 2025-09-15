@@ -173,7 +173,7 @@ import { ref, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { Chart, registerables } from 'chart.js'
 import { storage } from '../services/storage.js'
-import { getCurrentUser } from '../config/supabase.js'
+import { useUserStore } from '@/stores/UserStore.js'
 
 Chart.register(...registerables)
 
@@ -181,6 +181,7 @@ export default {
   name: 'Dashboard',
   setup() {
     const router = useRouter()
+    const userStore = useUserStore()
     const users = ref([])
     const weeklyChart = ref(null)
     const monthlyChart = ref(null)
@@ -362,7 +363,7 @@ export default {
 
     onMounted(async () => {
       try {
-        const user = await getCurrentUser()
+        const user = userStore.getUser
         if (!user) {
           router.push('/auth')
           return

@@ -2,6 +2,7 @@ import { createApp } from 'vue'
 import { createRouter, createWebHistory } from 'vue-router'
 import App from './App.vue'
 import './style.css'
+import { createPinia } from 'pinia'
 
 // Import components
 import Onboarding from '@/components/Onboarding.vue'
@@ -14,8 +15,9 @@ import GroupSetup from '@/components/GroupSetup.vue'
 import JoinGroup from '@/components/JoinGroup.vue'
 
 // Import auth utilities
-import { getCurrentUser, isSupabaseConfigured } from '@/config/supabase.js'
+import { isSupabaseConfigured } from '@/config/httpConfig.js'
 import { storage } from '@/services/storage.js'
+import { useUserStore } from '@/stores/UserStore.js'
 
 // Router configuration
 const routes = [
@@ -61,6 +63,8 @@ const routes = [
   }
 ]
 
+// Create Pinia store
+const pinia = createPinia()
 const router = createRouter({
   history: createWebHistory(),
   routes
@@ -83,7 +87,7 @@ router.beforeEach(async (to, from, next) => {
   // Check if route requires authentication
   if (to.meta.requiresAuth) {
     try {
-      const user = await getCurrentUser()
+      const user = useUserStore().getUser
       if (!user) {
         // No user, redirect to auth
         next('/auth')
@@ -118,7 +122,7 @@ router.beforeEach(async (to, from, next) => {
     // Route doesn't require auth, check if user is already authenticated
     if (to.path === '/auth') {
       try {
-        const user = await getCurrentUser()
+        const user = useUserStore().getUser
         if (user) {
           // User is already authenticated, check if they have a group
           try {
@@ -147,4 +151,5 @@ router.beforeEach(async (to, from, next) => {
 
 const app = createApp(App)
 app.use(router)
+app.use(pinia)
 app.mount('#app')

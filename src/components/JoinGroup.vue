@@ -115,12 +115,14 @@
 <script>
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { joinGroupByInviteCode, getCurrentUser } from '../config/supabase.js'
+import { joinGroupByInviteCode } from '@/config/groupHttpService.js'
+import { useUserStore } from '@/stores/UserStore.js'
 
 export default {
   name: 'JoinGroup',
   setup() {
     const router = useRouter()
+    const userStore = useUserStore()
     const loading = ref(false)
     const error = ref('')
     const successMessage = ref('')
@@ -132,7 +134,7 @@ export default {
     // Set default display name from user email if available
     const initializeForm = async () => {
       try {
-        const user = await getCurrentUser()
+        const user = userStore.getUser
         if (user && user.email) {
           displayName.value = user.email.split('@')[0]
         }

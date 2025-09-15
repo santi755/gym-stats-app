@@ -119,12 +119,13 @@
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { storage } from '../services/storage.js'
-import { getCurrentUser } from '../config/supabase.js'
+import { useUserStore } from '@/stores/UserStore.js'
 
 export default {
   name: 'Onboarding',
   setup() {
     const router = useRouter()
+    const userStore = useUserStore()
     const users = ref([])
     const newUserName = ref('')
     const newUserColor = ref('#3b82f6')
@@ -132,7 +133,7 @@ export default {
 
     onMounted(async () => {
       try {
-        const user = await getCurrentUser()
+        const user = userStore.getUser
         if (!user) {
           router.push('/auth')
           return
@@ -143,7 +144,7 @@ export default {
         users.value = userList
         
         // Get current user ID
-        const currentUser = await getCurrentUser()
+        const currentUser = userStore.getUser
         currentUserId.value = currentUser?.id || ''
       } catch (error) {
         console.error('Error loading users:', error)

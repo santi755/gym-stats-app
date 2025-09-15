@@ -1,15 +1,12 @@
 import { 
   supabase, 
   TABLES, 
-  getCurrentUser, 
-  getUserPreferences, 
-  updateUserPreferences, 
-  createUserPreferences,
-  getGroupMembers,
-  getCurrentMember,
-  createEntry,
-  getGroupEntries
-} from '../config/supabase.js'
+} from '../config/httpConfig.js'
+import { createEntry, getGroupEntries } from '@/config/entriesHttpService.js'
+import { createUserPreferences, getUserPreferences, updateUserPreferences } from '@/config/userPreferencesHttpService.js'
+import { useUserStore } from '../stores/UserStore.js'
+import { createGroup, getUserGroups, getCurrentMember } from '@/config/groupHttpService.js'
+import {getGroupMembers } from '@/config/groupMemberHttpService.js'
 
 // Modern storage service using group members system
 export class StorageService {
@@ -31,7 +28,7 @@ export class StorageService {
 
   // Check if user is authenticated
   async isAuthenticated() {
-    const user = await getCurrentUser()
+    const user = useUserStore().getUser
     return !!user
   }
 
@@ -63,12 +60,10 @@ export class StorageService {
 
   // Group management
   async createGroup(name, description = '') {
-    const { createGroup } = await import('../config/supabase.js')
     return await createGroup(name, description)
   }
 
   async getGroups() {
-    const { getUserGroups } = await import('../config/supabase.js')
     return await getUserGroups()
   }
 
@@ -127,13 +122,13 @@ export class StorageService {
     
     if (!member) throw new Error('Miembro no encontrado')
 
-    const { updateGroupMember } = await import('../config/supabase.js')
+    const { updateGroupMember } = await import('../config/httpConfig.js')
     return await updateGroupMember(member.id, updates)
   }
 
   async deleteUser(userId) {
     // Only allow if user is deleting themselves (leaving group)
-    const user = await getCurrentUser()
+    const user = useUserStore().getUser
     if (user.id !== userId) {
       throw new Error('Solo puedes eliminar tu propia membresía')
     }
@@ -141,7 +136,7 @@ export class StorageService {
     const groupId = await this.getCurrentGroup()
     if (!groupId) throw new Error('No hay grupo seleccionado')
 
-    const { leaveGroup } = await import('../config/supabase.js')
+    const { leaveGroup } = await import('../config/httpConfig.js')
     return await leaveGroup(groupId)
   }
 
@@ -163,7 +158,7 @@ export class StorageService {
     if (!currentMember) throw new Error('No eres miembro de este grupo')
 
     // Only allow users to set their own points
-    const user = await getCurrentUser()
+    const user = useUserStore().getUser
     if (user.id !== userId) {
       throw new Error('Solo puedes editar tus propios puntos')
     }
@@ -536,7 +531,7 @@ export class StorageService {
   // Legacy compatibility methods
   async getSelectedGymUser() {
     // In new system, selected user is always current user
-    const user = await getCurrentUser()
+    const user = useUserStore().getUser
     return user?.id || null
   }
 

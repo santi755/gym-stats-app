@@ -5,7 +5,7 @@ import {
   isSupabaseConfigured, 
   testSupabaseConnection, 
   supabase 
-} from '../config/supabase.js'
+} from '../config/httpConfig.js'
 
 export async function runSupabaseTests() {
   console.log('🧪 Testing Supabase Configuration...\n')

@@ -143,12 +143,14 @@
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { storage } from '../services/storage.js'
-import { getCurrentUser, supabase } from '../config/supabase.js'
+import { supabase } from '../config/httpConfig.js'
+import { useUserStore } from '@/stores/UserStore.js'
 
 export default {
   name: 'GroupSetup',
   setup() {
     const router = useRouter()
+    const userStore = useUserStore()
     const existingGroups = ref([])
     const selectedGroupId = ref('')
     const loading = ref(false)
@@ -162,7 +164,7 @@ export default {
 
     onMounted(async () => {
       try {
-        const user = await getCurrentUser()
+        const user = userStore.getUser
         if (!user) {
           router.push('/auth')
           return
@@ -181,7 +183,7 @@ export default {
         existingGroups.value = groups
         
         // If user has a current group, select it
-        const currentGroup = await storage.getCurrentGroup()
+        const currentGroup = userStore.getGroup
         if (currentGroup) {
           selectedGroupId.value = currentGroup
         }

@@ -205,11 +205,13 @@
 <script>
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { supabase, isSupabaseConfigured, signIn, signUp } from '@/config/supabase.js'
+import { isSupabaseConfigured } from '@/config/httpConfig.js'
+import {useUserStore} from '@/stores/UserStore.js'
 
 export default {
   name: 'Auth',
   setup() {
+    const userStore = useUserStore()
     const router = useRouter()
     const activeTab = ref('signin')
     const loading = ref(false)
@@ -238,7 +240,7 @@ export default {
       success.value = ''
 
       try {
-        const { data, error: authError } = await signIn(
+        const { data, error: authError } = await userStore.signInUser(
           signInForm.value.email,
           signInForm.value.password
         )
@@ -248,10 +250,7 @@ export default {
         success.value = '¡Sesión iniciada correctamente!'
         
         // Redirect to groups setup after successful login
-        setTimeout(() => {
-          router.push('/groups')
-        }, 1000)
-
+        router.push('/groups')
       } catch (err) {
         error.value = err.message || 'Error al iniciar sesión'
       } finally {
@@ -270,7 +269,7 @@ export default {
       success.value = ''
 
       try {
-        const { data, error: authError } = await signUp(
+        const { data, error: authError } = await userStore.signUpUser(
           signUpForm.value.email,
           signUpForm.value.password
         )
@@ -279,12 +278,8 @@ export default {
 
         success.value = '¡Cuenta creada! Revisa tu email para confirmar.'
         
-        // Switch to sign in tab
-        setTimeout(() => {
-          activeTab.value = 'signin'
-          signInForm.value.email = signUpForm.value.email
-        }, 2000)
-
+        activeTab.value = 'signin'
+        signInForm.value.email = signUpForm.value.email
       } catch (err) {
         error.value = err.message || 'Error al crear la cuenta'
       } finally {
@@ -300,6 +295,7 @@ export default {
     // No need to check here as the router will redirect if user is already authenticated
 
     return {
+      userStore,
       activeTab,
       loading,
       error,
