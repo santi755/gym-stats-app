@@ -10,8 +10,7 @@ export async function getCurrentGroup(groupId) {
     return data
   }
 
-  export async function createGroup(name, description = '') {
-    const { data: { user } } = await supabase.auth.getUser()
+  export async function createGroup(user, name, description = '') {
     if (!user) throw new Error('User not authenticated')
     
     const { data, error } = await supabase
@@ -31,9 +30,7 @@ export async function getCurrentGroup(groupId) {
     return data
   }
 
-  export async function getUserGroups() {
-    const { data: { user }, error: authError } = await supabase.auth.getUser()
-    if (authError) throw authError
+  export async function getUserGroups(user) {
     if (!user) throw new Error('User not authenticated')
   
     const { data, error } = await supabase
@@ -60,8 +57,7 @@ export async function getCurrentGroup(groupId) {
 
 
 // Group membership functions
-export async function joinGroup(groupId, displayName, color = '#3b82f6', role = 'member') {
-    const { data: { user } } = await supabase.auth.getUser()
+export async function joinGroup(groupId, displayName, color = '#3b82f6', role = 'member', user) {
     if (!user) throw new Error('User not authenticated')
     
     const { data, error } = await supabase
@@ -81,9 +77,7 @@ export async function joinGroup(groupId, displayName, color = '#3b82f6', role = 
   }
 
 
-  export async function joinGroupByInviteCode(inviteCode, displayName, color = '#3b82f6') {
-    const { data: { user }, error: authError } = await supabase.auth.getUser()
-    if (authError) throw authError
+  export async function joinGroupByInviteCode(inviteCode, displayName, color = '#3b82f6', user) {
     if (!user) throw new Error('User not authenticated')
   
     // Buscar grupo por invite_code y traer si el usuario ya es miembro
@@ -123,8 +117,7 @@ export async function joinGroup(groupId, displayName, color = '#3b82f6', role = 
 
 
   // Group invitation functions
-export async function createGroupInvitation(groupId, email = null) {
-    const { data: { user } } = await supabase.auth.getUser()
+export async function createGroupInvitation(groupId, email = null, user) {
     if (!user) throw new Error('User not authenticated')
     
     // Get group invite code
@@ -161,8 +154,7 @@ export async function createGroupInvitation(groupId, email = null) {
   }
 
   // Get current user's member record for a group
-export async function getCurrentMember(groupId) {
-    const { data: { user } } = await supabase.auth.getUser()
+export async function getCurrentMember(groupId, user) {
     if (!user) throw new Error('User not authenticated')
     
     const { data, error } = await supabase

@@ -6,7 +6,7 @@
         <div class="flex items-center justify-between">
           <div>
             <h1 class="text-lg font-semibold text-gray-900">Gym Stats</h1>
-            <p v-if="currentUser" class="text-xs text-gray-500">{{ currentUser.email }}</p>
+            <p v-if="userStore.user" class="text-xs text-gray-500">{{ userStore.user.email }}</p>
           </div>
           <div class="flex space-x-2">
             <!-- Home/Daily Board -->
@@ -61,7 +61,7 @@
             
             <!-- Login/Logout Button -->
             <button
-              v-if="!currentUser"
+              v-if="!userStore.user"
               @click="$router.push('/auth')"
               class="p-2 rounded-lg transition-colors text-gray-600 hover:bg-gray-100"
               title="Iniciar Sesión"
@@ -87,7 +87,7 @@
     </nav>
 
     <!-- Current Group Info -->
-    <div v-if="currentUser && currentGroupName" class="bg-blue-50 border-b border-blue-200">
+    <div v-if="userStore.user && currentGroupName" class="bg-blue-50 border-b border-blue-200">
       <div class="max-w-md mx-auto px-4 py-2">
         <div class="flex items-center justify-between">
           <div class="flex items-center space-x-2">
@@ -149,19 +149,15 @@
 }
 </style>
 
-<script>
+<script setup>
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { isSupabaseConfigured, supabase } from '@/config/httpConfig.js'
 import { storage } from '@/services/storage.js'
 import { useUserStore } from '@/stores/UserStore.js'
 
-export default {
-  name: 'App',
-  setup() {
     const route = useRoute()
     const router = useRouter()
-    const currentUser = ref(null)
     const currentGroupName = ref('')
     const userStore = useUserStore()
 
@@ -171,23 +167,10 @@ export default {
       return !isSupabaseConfigured() && route.path !== '/auth'
     })
 
-    // Load current user
-    const loadCurrentUser = async () => {
-      try {
-        if (isSupabaseConfigured()) {
-          await userStore.fetchUser()
-          currentUser.value = userStore.getUser
-        }
-      } catch (error) {
-        console.log('No user logged in')
-        currentUser.value = null
-      }
-    }
-
     // Load current group name
     const loadCurrentGroup = async () => {
       try {
-        if (currentUser.value && isSupabaseConfigured()) {
+        if (userStore.user && isSupabaseConfigured()) {
           const currentGroup = await storage.getCurrentGroup()
           currentGroupName.value = currentGroup?.name || ''
         } else {
@@ -202,8 +185,7 @@ export default {
     // Logout function
     const logout = async () => {
       try {
-        await supabase.auth.signOut()
-        currentUser.value = null
+        await userStore.signOutUser()
         currentGroupName.value = ''
         router.push('/auth')
       } catch (error) {
@@ -213,24 +195,14 @@ export default {
 
     // Watch for route changes to reload group info
     watch(route, () => {
-      if (currentUser.value) {
+      if (userStore.user) {
         loadCurrentGroup()
       }
     })
 
     onMounted(async () => {
-      await loadCurrentUser()
-      if (currentUser.value) {
+      if (userStore.user) {
         await loadCurrentGroup()
       }
     })
-
-    return {
-      showConfigWarning,
-      currentUser,
-      currentGroupName,
-      logout
-    }
-  }
-}
 </script>

@@ -2,8 +2,7 @@ import { supabase, TABLES } from './httpConfig.js'
 
 const TABLE = TABLES.USER_PREFERENCES
 
-export async function createUserPreferences(currentGroupId = null, selectedGymUserId = null) {
-    const { data: { user } } = await supabase.auth.getUser()
+export async function createUserPreferences(currentGroupId = null, selectedGymUserId = null, user) {
     if (!user) throw new Error('User not authenticated')
     
     const { data, error } = await supabase
@@ -20,8 +19,7 @@ export async function createUserPreferences(currentGroupId = null, selectedGymUs
     return data
   }
 
-  export async function updateUserPreferences(updates) {
-    const { data: { user } } = await supabase.auth.getUser()
+  export async function updateUserPreferences(updates, user) {
     if (!user) throw new Error('User not authenticated')
     
     const { data, error } = await supabase
@@ -36,8 +34,7 @@ export async function createUserPreferences(currentGroupId = null, selectedGymUs
   }
 
   // User Preferences functions
-export async function getUserPreferences() {
-    const { data: { user } } = await supabase.auth.getUser()
+export async function getUserPreferences(user) {
     if (!user) throw new Error('User not authenticated')
     
     const { data, error } = await supabase
@@ -48,7 +45,7 @@ export async function getUserPreferences() {
     
     if (error && error.code === 'PGRST116') {
       // No preferences found, create default ones
-      return await createUserPreferences()
+      return await createUserPreferences(user)
     }
     
     if (error) throw error

@@ -4,9 +4,9 @@ import {
 } from '../config/httpConfig.js'
 import { createEntry, getGroupEntries } from '@/config/entriesHttpService.js'
 import { createUserPreferences, getUserPreferences, updateUserPreferences } from '@/config/userPreferencesHttpService.js'
-import { useUserStore } from '../stores/UserStore.js'
 import { createGroup, getUserGroups, getCurrentMember } from '@/config/groupHttpService.js'
 import {getGroupMembers } from '@/config/groupMemberHttpService.js'
+import { useUserStore } from '@/stores/UserStore.js'
 
 // Modern storage service using group members system
 export class StorageService {
@@ -28,7 +28,7 @@ export class StorageService {
 
   // Check if user is authenticated
   async isAuthenticated() {
-    const user = useUserStore().getUser
+    const user = useUserStore().user
     return !!user
   }
 
@@ -36,7 +36,8 @@ export class StorageService {
   async getUserPreferences() {
     if (!this._preferencesCache) {
       try {
-        this._preferencesCache = await getUserPreferences()
+        const user = useUserStore().user
+        this._preferencesCache = await getUserPreferences(user)
       } catch (error) {
         console.error('Error getting user preferences:', error)
         // Create default preferences if they don't exist
@@ -48,7 +49,8 @@ export class StorageService {
 
   // Update preferences and clear cache
   async updatePreferences(updates) {
-    const updated = await updateUserPreferences(updates)
+    const user = useUserStore().user
+    const updated = await updateUserPreferences(updates, user)
     this._preferencesCache = updated
     return updated
   }
@@ -60,15 +62,18 @@ export class StorageService {
 
   // Group management
   async createGroup(name, description = '') {
-    return await createGroup(name, description)
+    const user = useUserStore().user
+    return await createGroup(user, name, description)
   }
 
   async getGroups() {
-    return await getUserGroups()
+    const user = useUserStore().user
+    return await getUserGroups(user)
   }
 
   async setCurrentGroup(groupId) {
-    await this.updatePreferences({ current_group_id: groupId })
+    const user = useUserStore().user
+    await this.updatePreferences({ current_group_id: groupId }, user)
   }
 
   async getCurrentGroup() {

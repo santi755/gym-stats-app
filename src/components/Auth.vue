@@ -87,6 +87,7 @@
           <input
             v-model="signUpForm.email"
             type="email"
+            autocomplete="email"
             required
             :disabled="loading"
             class="input-field"

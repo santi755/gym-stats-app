@@ -5,6 +5,7 @@ import { getCurrentUser, signIn, signUp } from '@/config/authHttpService.js'
 export const useUserStore = defineStore('user', {
   state: () => ({
     user: null,
+    token: null,
     group: null,
   }),
 
@@ -15,8 +16,9 @@ export const useUserStore = defineStore('user', {
         password
       )
 
-      this.user = result.data.user
+      console.log("signInUser", result)
 
+      this.user = result.data.user
       return result;
     },
 
@@ -26,11 +28,20 @@ export const useUserStore = defineStore('user', {
         password
       )
 
+      console.log("signUpUser", result)
+
+      return result;
+    },
+
+    async signOutUser() {
+      const result = await signOut()
+      this.user = null
       return result;
     },
 
     async fetchUser() {
       const user = await getCurrentUser()
+      console.log("fetchUser", user)
       this.user = user
     },
 

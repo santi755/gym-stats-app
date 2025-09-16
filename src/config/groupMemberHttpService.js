@@ -23,8 +23,7 @@ export async function getGroupMembers(groupId) {
     return data
   }
 
-  export async function leaveGroup(groupId) {
-    const { data: { user } } = await supabase.auth.getUser()
+  export async function leaveGroup(groupId, user) {
     if (!user) throw new Error('User not authenticated')
     
     const { error } = await supabase

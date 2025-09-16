@@ -74,6 +74,7 @@ const router = createRouter({
 router.beforeEach(async (to, from, next) => {
   // Check if Supabase is configured
   if (!isSupabaseConfigured()) {
+    console.log("Supabase not configured")
     // If not configured and trying to access auth page, allow it
     if (to.path === '/auth') {
       next()
@@ -84,12 +85,18 @@ router.beforeEach(async (to, from, next) => {
     return
   }
 
+
+  await useUserStore().fetchUser()
+
   // Check if route requires authentication
   if (to.meta.requiresAuth) {
+    console.log("Route requires auth")
     try {
-      const user = useUserStore().getUser
+      const user = useUserStore().user
+      console.log("Middleware user", user)
       if (!user) {
         // No user, redirect to auth
+        console.log("No user, redirecting to auth")
         next('/auth')
         return
       }
@@ -97,54 +104,66 @@ router.beforeEach(async (to, from, next) => {
       // User exists, check if they need group setup (except for group-related pages)
       const groupSetupRoutes = ['/groups', '/join-group']
       if (!groupSetupRoutes.includes(to.path)) {
+        console.log("No group setup routes, checking group")
         try {
           const currentGroup = await storage.getCurrentGroup()
           if (!currentGroup) {
             // No group selected, redirect to group setup
+            console.log("No group selected, redirecting to group setup")
             next('/groups')
             return
           }
         } catch (error) {
           console.error('Error checking group:', error)
           // If there's an error checking groups, go to group setup
+          console.log("Error checking group, redirecting to group setup")
           next('/groups')
           return
         }
       }
       
       // User exists and has group (or is going to groups page), allow navigation
+      console.log("User exists and has group, allowing navigation")
       next()
     } catch (error) {
       console.error('Auth check failed:', error)
+      console.log("Auth check failed, redirecting to auth")
       next('/auth')
     }
   } else {
     // Route doesn't require auth, check if user is already authenticated
+    console.log("Route doesn't require auth, checking if user is already authenticated")
     if (to.path === '/auth') {
       try {
-        const user = useUserStore().getUser
+        const user = useUserStore().user
         if (user) {
           // User is already authenticated, check if they have a group
           try {
             const currentGroup = await storage.getCurrentGroup()
             if (!currentGroup) {
+              console.log("No group selected, redirecting to group setup")
               next('/groups')
               return
             }
             // User has group, redirect to home
+            console.log("User has group, redirecting to home")
             next('/')
             return
           } catch (error) {
             // Error checking group, go to group setup
+            console.log("Error checking group, redirecting to group setup")
             next('/groups')
             return
           }
         }
       } catch (error) {
         console.error('Auth check failed:', error)
+        console.log("Auth check failed, redirecting to auth")
+        next('/auth')
       }
     }
     // Allow navigation to non-auth routes
+    console.log("Allowing navigation to non-auth routes")
     next()
   }
 })
