@@ -10,30 +10,20 @@
     <div class="card">
       <h3 class="font-semibold mb-3">Mi Entrenamiento de Hoy</h3>
       <div class="flex gap-2">
-        <button
-          @click="markMyself"
-          class="flex-1 btn-primary"
-          :disabled="myPointsToday > 0"
-        >
+        <button @click="markMyself" class="flex-1 btn-primary" :disabled="myPointsToday > 0">
           {{ myPointsToday > 0 ? '¡Ya registrado!' : '¡Fui al gym!' }}
         </button>
-        <button
-          @click="clearMyPoints"
-          class="flex-1 btn-secondary"
-          :disabled="myPointsToday === 0"
-        >
+        <button @click="clearMyPoints" class="flex-1 btn-secondary" :disabled="myPointsToday === 0">
           Deshacer
         </button>
       </div>
-      <p class="text-xs text-gray-600 mt-2 text-center">
-        Solo puedes editar tus propios puntos
-      </p>
+      <p class="text-xs text-gray-600 mt-2 text-center">Solo puedes editar tus propios puntos</p>
     </div>
 
     <!-- Users list -->
     <div class="space-y-3">
       <UserRow
-        v-for="user in users"
+        v-for="user in groupMemberStore.members"
         :key="user.user_id || user.id"
         :user="user"
         :date="today"
@@ -67,7 +57,9 @@
           class="flex items-center justify-between p-2 bg-gray-50 rounded-lg"
         >
           <div class="flex items-center gap-2">
-            <span class="w-6 h-6 rounded-full bg-blue-100 text-blue-600 text-xs font-bold flex items-center justify-center">
+            <span
+              class="w-6 h-6 rounded-full bg-blue-100 text-blue-600 text-xs font-bold flex items-center justify-center"
+            >
               {{ index + 1 }}
             </span>
             <div
@@ -99,139 +91,124 @@
   </div>
 </template>
 
-<script>
+<script setup>
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { storage } from '../services/storage.js'
 import { useUserStore } from '@/stores/UserStore.js'
+import { useUserPreferences } from '@/stores/useUserPreferences.js'
 import UserRow from './UserRow.vue'
+import { useGroupMemberStore } from '@/stores/groupMemberStore.js'
 
-export default {
-  name: 'DailyBoard',
-  components: {
-    UserRow
-  },
-  setup() {
-    const router = useRouter()
-    const userStore = useUserStore()
-    const users = ref([])
-    const today = ref('')
-    const leaderboard = ref([])
-    const currentUserId = ref('')
-    const myPointsToday = ref(0)
+const router = useRouter()
+const userStore = useUserStore()
+const userPreferences = useUserPreferences()
+const groupMemberStore = useGroupMemberStore()
+const users = ref([])
+const today = ref('')
+const leaderboard = ref([])
+const currentUserId = ref('')
+const myPointsToday = ref(0)
 
-    // Computed properties
-    const formattedDate = computed(() => {
-      const date = new Date(today.value)
-      return date.toLocaleDateString('es-ES', {
-        weekday: 'long',
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric'
-      })
-    })
+// Computed properties
+const formattedDate = computed(() => {
+  const date = new Date(today.value)
+  return date.toLocaleDateString('es-ES', {
+    weekday: 'long',
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+  })
+})
 
-    const presentCount = ref(0)
-    const todayTotal = ref(0)
+const presentCount = ref(0)
+const todayTotal = ref(0)
 
-    const loadTodayStats = async () => {
-      try {
-        const entries = await storage.getDateEntries(today.value)
-        presentCount.value = Object.values(entries).filter(points => points > 0).length
-        todayTotal.value = Object.values(entries).reduce((sum, points) => sum + points, 0)
-      } catch (error) {
-        console.error('Error loading today stats:', error)
-      }
-    }
+const loadUsers = async () => {
+  try {
+    // Get user preferences
+    await userPreferences.getUserPreferences(userStore.user)
 
-    // Methods
-    const loadUsers = async () => {
-      try {
-        const userList = await storage.getUsers()
-        users.value = userList
-      } catch (error) {
-        console.error('Error loading users:', error)
-      }
-    }
+    const groupId = userPreferences.preferences.current_group_id
+    await groupMemberStore.getGroupMembers(groupId)
+    console.log('groupMemberStore.members', groupMemberStore.members)
+    users.value = groupMemberStore.members
+    //console.log('users', users.value)
+  } catch (error) {
+    console.error('Error loading users:', error)
+  }
+}
+/*
+const loadTodayStats = async () => {
+  try {
+    const entries = await storage.getDateEntries(today.value)
+    presentCount.value = Object.values(entries).filter((points) => points > 0).length
+    todayTotal.value = Object.values(entries).reduce((sum, points) => sum + points, 0)
+  } catch (error) {
+    console.error('Error loading today stats:', error)
+  }
+}
 
-    const loadLeaderboard = async () => {
-      try {
-        leaderboard.value = await storage.getLeaderboard()
-      } catch (error) {
-        console.error('Error loading leaderboard:', error)
-      }
-    }
+// Methods
 
-    const refreshData = async () => {
-      await loadLeaderboard()
-      await loadMyPoints()
-      await loadTodayStats()
-    }
+const loadLeaderboard = async () => {
+  try {
+    leaderboard.value = await storage.getLeaderboard()
+  } catch (error) {
+    console.error('Error loading leaderboard:', error)
+  }
+}
 
-    const loadMyPoints = async () => {
-      try {
-        myPointsToday.value = await storage.getUserPoints(today.value, currentUserId.value)
-      } catch (error) {
-        console.error('Error loading my points:', error)
-      }
-    }
+const refreshData = async () => {
+  await loadLeaderboard()
+  await loadMyPoints()
+  await loadTodayStats()
+}
 
-    const markMyself = async () => {
-      try {
-        await storage.setUserPoints(today.value, currentUserId.value, 1)
-        await refreshData()
-      } catch (error) {
-        alert('Error al registrar entrenamiento: ' + error.message)
-      }
-    }
+const loadMyPoints = async () => {
+  try {
+    myPointsToday.value = await storage.getUserPoints(today.value, currentUserId.value)
+  } catch (error) {
+    console.error('Error loading my points:', error)
+  }
+}
 
-    const clearMyPoints = async () => {
-      if (confirm('¿Deshacer tu registro de hoy?')) {
-        try {
-          await storage.setUserPoints(today.value, currentUserId.value, 0)
-          await refreshData()
-        } catch (error) {
-          alert('Error al deshacer registro: ' + error.message)
-        }
-      }
-    }
+const markMyself = async () => {
+  try {
+    await storage.setUserPoints(today.value, currentUserId.value, 1)
+    await refreshData()
+  } catch (error) {
+    alert('Error al registrar entrenamiento: ' + error.message)
+  }
+}
 
-    // Lifecycle
-    onMounted(async () => {
-      try {
-        // Get current user
-        const user = userStore.getUser
-        if (!user) {
-          router.push('/auth')
-          return
-        }
-        currentUserId.value = userStore.getUser.id
-        
-        today.value = storage.getTodayKey()
-        await loadUsers()
-        await loadLeaderboard()
-        await loadMyPoints()
-        await loadTodayStats()
-      } catch (error) {
-        console.error('Error initializing:', error)
-        router.push('/auth')
-      }
-    })
-
-    return {
-      users,
-      today,
-      leaderboard,
-      currentUserId,
-      myPointsToday,
-      formattedDate,
-      presentCount,
-      todayTotal,
-      refreshData,
-      markMyself,
-      clearMyPoints,
-      loadTodayStats
+const clearMyPoints = async () => {
+  if (confirm('¿Deshacer tu registro de hoy?')) {
+    try {
+      await storage.setUserPoints(today.value, currentUserId.value, 0)
+      await refreshData()
+    } catch (error) {
+      alert('Error al deshacer registro: ' + error.message)
     }
   }
 }
+*/
+// Lifecycle
+onMounted(async () => {
+  try {
+    currentUserId.value = userStore.user.id
+    console.log('currentUserId', currentUserId.value)
+    today.value = storage.getTodayKey()
+    await loadUsers()
+
+    /*
+    await loadLeaderboard()
+    await loadMyPoints()
+    await loadTodayStats()
+    */
+  } catch (error) {
+    console.error('Error initializing:', error)
+    router.push('/auth')
+  }
+})
 </script>

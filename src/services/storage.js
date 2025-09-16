@@ -35,6 +35,7 @@ export class StorageService {
 
   // Get user preferences with caching
   async getUserPreferences() {
+    console.log('1.1) getUserPreferences', this._preferencesCache)
     if (!this._preferencesCache) {
       try {
         const user = useUserStore().user
@@ -109,16 +110,12 @@ export class StorageService {
 
   // Member management (replaces old user management)
   async getUsers() {
+    console.log('1) getUsers')
     const groupId = await this.getCurrentGroup()
+    console.log('2) groupId', groupId)
     if (!groupId) return []
-
+    console.log('3) getGroupMembers', groupId)
     return await getGroupMembers(groupId)
-  }
-
-  async addUser(name, color = '#3b82f6', avatar = null) {
-    // This is now deprecated - users join via invitations
-    // Keeping for backward compatibility
-    throw new Error('Para agregar miembros, usa el sistema de invitaciones')
   }
 
   async updateUser(userId, updates) {
@@ -489,20 +486,6 @@ export class StorageService {
     return true
   }
 
-  // Import is not supported for member system - users must join via invitations
-  async importJSON(file, mode = 'replace') {
-    throw new Error(
-      'La importación no está disponible con el sistema de invitaciones. Los usuarios deben unirse mediante códigos de invitación.'
-    )
-  }
-
-  // Check if data exists
-  async hasData() {
-    const users = await this.getUsers()
-    return users.length > 0
-  }
-
-  // Clear all data - only clears current user's entries
   async clearAllData() {
     const groupId = await this.getCurrentGroup()
     const currentMember = await this.getCurrentMemberRecord()
