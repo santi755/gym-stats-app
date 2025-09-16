@@ -1,11 +1,12 @@
-import { 
-  supabase, 
-  TABLES, 
-} from '../config/httpConfig.js'
+import { supabase, TABLES } from '../config/httpConfig.js'
 import { createEntry, getGroupEntries } from '@/config/entriesHttpService.js'
-import { createUserPreferences, getUserPreferences, updateUserPreferences } from '@/config/userPreferencesHttpService.js'
+import {
+  createUserPreferences,
+  getUserPreferences,
+  updateUserPreferences,
+} from '@/config/userPreferencesHttpService.js'
 import { createGroup, getUserGroups, getCurrentMember } from '@/config/groupHttpService.js'
-import {getGroupMembers } from '@/config/groupMemberHttpService.js'
+import { getGroupMembers } from '@/config/groupMemberHttpService.js'
 import { useUserStore } from '@/stores/UserStore.js'
 
 // Modern storage service using group members system
@@ -20,7 +21,7 @@ export class StorageService {
     window.addEventListener('online', () => {
       this.isOnline = true
     })
-    
+
     window.addEventListener('offline', () => {
       this.isOnline = false
     })
@@ -84,14 +85,17 @@ export class StorageService {
   // Ensure user has a group (create default if needed)
   async ensureUserHasGroup() {
     const preferences = await this.getUserPreferences()
-    
+
     if (!preferences.current_group_id) {
       // Check if user has any groups
       const groups = await this.getGroups()
-      
+
       if (groups.length === 0) {
         // Create a default group
-        const defaultGroup = await this.createGroup('Mi Grupo de Gym', 'Grupo creado automáticamente')
+        const defaultGroup = await this.createGroup(
+          'Mi Grupo de Gym',
+          'Grupo creado automáticamente'
+        )
         return defaultGroup.id
       } else {
         // Set the first group as current
@@ -99,7 +103,7 @@ export class StorageService {
         return groups[0].id
       }
     }
-    
+
     return preferences.current_group_id
   }
 
@@ -123,8 +127,8 @@ export class StorageService {
     if (!groupId) throw new Error('No hay grupo seleccionado')
 
     const members = await getGroupMembers(groupId)
-    const member = members.find(m => m.user_id === userId)
-    
+    const member = members.find((m) => m.user_id === userId)
+
     if (!member) throw new Error('Miembro no encontrado')
 
     const { updateGroupMember } = await import('../config/httpConfig.js')
@@ -177,7 +181,7 @@ export class StorageService {
 
     // Find member record for this user
     const members = await getGroupMembers(groupId)
-    const member = members.find(m => m.user_id === userId)
+    const member = members.find((m) => m.user_id === userId)
     if (!member) return 0
 
     const { data, error } = await supabase
@@ -216,7 +220,7 @@ export class StorageService {
     const entries = await getGroupEntries(groupId, '2020-01-01', '2030-12-31')
     const result = {}
 
-    entries.forEach(entry => {
+    entries.forEach((entry) => {
       if (!result[entry.date]) {
         result[entry.date] = {}
       }
@@ -233,7 +237,7 @@ export class StorageService {
 
     // Find member record for this user
     const members = await getGroupMembers(groupId)
-    const member = members.find(m => m.user_id === userId)
+    const member = members.find((m) => m.user_id === userId)
     if (!member) return 0
 
     const { data, error } = await supabase
@@ -243,33 +247,33 @@ export class StorageService {
       .eq('member_id', member.id)
 
     if (error) throw error
-    
+
     return data.reduce((total, entry) => total + entry.points, 0)
   }
 
   async getAllTotals() {
     const users = await this.getUsers()
     const totals = {}
-    
+
     for (const user of users) {
       totals[user.user_id] = await this.getUserTotal(user.user_id)
     }
-    
+
     return totals
   }
 
   async getLeaderboard() {
     const users = await this.getUsers()
     const totals = await this.getAllTotals()
-    
+
     return users
-      .map(user => ({
+      .map((user) => ({
         id: user.user_id,
         name: user.display_name,
         color: user.color,
         avatar: user.avatar,
         total: totals[user.user_id] || 0,
-        role: user.role
+        role: user.role,
       }))
       .sort((a, b) => b.total - a.total)
   }
@@ -279,23 +283,23 @@ export class StorageService {
     const users = await this.getUsers()
     const today = new Date()
     const weeks = []
-    
+
     for (let i = 0; i < weeksBack; i++) {
       const weekStart = new Date(today)
-      weekStart.setDate(today.getDate() - (today.getDay() + (i * 7)))
+      weekStart.setDate(today.getDate() - (today.getDay() + i * 7))
       weekStart.setHours(0, 0, 0, 0)
-      
+
       const weekEnd = new Date(weekStart)
       weekEnd.setDate(weekStart.getDate() + 6)
       weekEnd.setHours(23, 59, 59, 999)
-      
+
       const weekData = {
         weekStart: weekStart.toISOString().split('T')[0],
         weekEnd: weekEnd.toISOString().split('T')[0],
         label: `Semana ${weeksBack - i}`,
-        users: {}
+        users: {},
       }
-      
+
       // Calculate points for each user in this week
       for (const user of users) {
         let weekPoints = 0
@@ -308,13 +312,13 @@ export class StorageService {
         weekData.users[user.user_id] = {
           name: user.display_name,
           color: user.color,
-          points: weekPoints
+          points: weekPoints,
         }
       }
-      
+
       weeks.push(weekData)
     }
-    
+
     return weeks.reverse()
   }
 
@@ -323,39 +327,39 @@ export class StorageService {
     const users = await this.getUsers()
     const today = new Date()
     const months = []
-    
+
     for (let i = 0; i < monthsBack; i++) {
       const monthStart = new Date(today.getFullYear(), today.getMonth() - i, 1)
       const monthEnd = new Date(today.getFullYear(), today.getMonth() - i + 1, 0)
-      
+
       const monthData = {
         monthStart: monthStart.toISOString().split('T')[0],
         monthEnd: monthEnd.toISOString().split('T')[0],
         label: monthStart.toLocaleDateString('es-ES', { month: 'long', year: 'numeric' }),
-        users: {}
+        users: {},
       }
-      
+
       // Calculate points for each user in this month
       for (const user of users) {
         let monthPoints = 0
         const currentDate = new Date(monthStart)
-        
+
         while (currentDate <= monthEnd) {
           const dateKey = currentDate.toISOString().split('T')[0]
           monthPoints += await this.getUserPoints(dateKey, user.user_id)
           currentDate.setDate(currentDate.getDate() + 1)
         }
-        
+
         monthData.users[user.user_id] = {
           name: user.display_name,
           color: user.color,
-          points: monthPoints
+          points: monthPoints,
         }
       }
-      
+
       months.push(monthData)
     }
-    
+
     return months.reverse()
   }
 
@@ -364,12 +368,12 @@ export class StorageService {
     const today = new Date()
     let streak = 0
     let currentDate = new Date(today)
-    
+
     // Check backwards from today
     while (true) {
       const dateKey = currentDate.toISOString().split('T')[0]
       const points = await this.getUserPoints(dateKey, userId)
-      
+
       if (points > 0) {
         streak++
         currentDate.setDate(currentDate.getDate() - 1)
@@ -377,7 +381,7 @@ export class StorageService {
         break
       }
     }
-    
+
     return streak
   }
 
@@ -386,15 +390,15 @@ export class StorageService {
     const weeklyStats = await this.getWeeklyStats(12)
     let bestWeek = null
     let maxPoints = 0
-    
-    weeklyStats.forEach(week => {
+
+    weeklyStats.forEach((week) => {
       const userPoints = week.users[userId]?.points || 0
       if (userPoints > maxPoints) {
         maxPoints = userPoints
         bestWeek = week
       }
     })
-    
+
     return { week: bestWeek, points: maxPoints }
   }
 
@@ -409,14 +413,14 @@ export class StorageService {
     const entries = await this.getAllEntries()
     const totalDays = Object.keys(entries).length
     if (totalDays === 0) return 0
-    
+
     let totalPoints = 0
-    Object.values(entries).forEach(dayEntries => {
-      Object.values(dayEntries).forEach(points => {
+    Object.values(entries).forEach((dayEntries) => {
+      Object.values(dayEntries).forEach((points) => {
         totalPoints += points
       })
     })
-    
+
     return Math.round((totalPoints / totalDays) * 10) / 10
   }
 
@@ -424,27 +428,27 @@ export class StorageService {
   async exportJSON() {
     const users = await this.getUsers()
     const entries = await this.getAllEntries()
-    
+
     const data = {
       version: 2, // Updated version for new member system
-      members: users.map(user => ({
+      members: users.map((user) => ({
         user_id: user.user_id,
         display_name: user.display_name,
         color: user.color,
         avatar: user.avatar,
-        role: user.role
+        role: user.role,
       })),
       entries,
       meta: {
         createdAt: new Date().toISOString(),
         lastModified: new Date().toISOString(),
-        source: 'supabase-members'
-      }
+        source: 'supabase-members',
+      },
     }
-    
+
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
     const url = URL.createObjectURL(blob)
-    
+
     const a = document.createElement('a')
     a.href = url
     a.download = `gym-points-${new Date().toISOString().split('T')[0]}.json`
@@ -459,22 +463,22 @@ export class StorageService {
     const users = await this.getUsers()
     const entries = await this.getAllEntries()
     const dates = Object.keys(entries).sort((a, b) => b.localeCompare(a))
-    
+
     let csv = 'fecha,usuario,puntos\n'
-    
-    dates.forEach(date => {
+
+    dates.forEach((date) => {
       const dayEntries = entries[date]
-      Object.keys(dayEntries).forEach(userId => {
-        const user = users.find(u => u.user_id === userId)
+      Object.keys(dayEntries).forEach((userId) => {
+        const user = users.find((u) => u.user_id === userId)
         if (user) {
           csv += `${date},${user.display_name},${dayEntries[userId]}\n`
         }
       })
     })
-    
+
     const blob = new Blob([csv], { type: 'text/csv' })
     const url = URL.createObjectURL(blob)
-    
+
     const a = document.createElement('a')
     a.href = url
     a.download = `gym-points-${new Date().toISOString().split('T')[0]}.csv`
@@ -487,7 +491,9 @@ export class StorageService {
 
   // Import is not supported for member system - users must join via invitations
   async importJSON(file, mode = 'replace') {
-    throw new Error('La importación no está disponible con el sistema de invitaciones. Los usuarios deben unirse mediante códigos de invitación.')
+    throw new Error(
+      'La importación no está disponible con el sistema de invitaciones. Los usuarios deben unirse mediante códigos de invitación.'
+    )
   }
 
   // Check if data exists
@@ -500,7 +506,7 @@ export class StorageService {
   async clearAllData() {
     const groupId = await this.getCurrentGroup()
     const currentMember = await this.getCurrentMemberRecord()
-    
+
     if (groupId && currentMember) {
       // Only delete current user's entries
       await supabase
@@ -509,7 +515,7 @@ export class StorageService {
         .eq('group_id', groupId)
         .eq('member_id', currentMember.id)
     }
-    
+
     return true
   }
 
@@ -529,7 +535,7 @@ export class StorageService {
       useSupabase: true,
       isOnline: this.isOnline,
       configured: true,
-      system: 'members'
+      system: 'members',
     }
   }
 

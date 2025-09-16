@@ -21,60 +21,60 @@ import { useUserStore } from '@/stores/UserStore.js'
 
 // Router configuration
 const routes = [
-  { 
-    path: '/', 
+  {
+    path: '/',
     component: DailyBoard,
-    meta: { requiresAuth: true }
+    meta: { requiresAuth: true },
   },
-  { 
-    path: '/groups', 
+  {
+    path: '/groups',
     component: GroupSetup,
-    meta: { requiresAuth: true }
+    meta: { requiresAuth: true },
   },
-  { 
-    path: '/join-group', 
+  {
+    path: '/join-group',
     component: JoinGroup,
-    meta: { requiresAuth: true }
+    meta: { requiresAuth: true },
   },
-  { 
-    path: '/onboarding', 
+  {
+    path: '/onboarding',
     component: Onboarding,
-    meta: { requiresAuth: true }
+    meta: { requiresAuth: true },
   },
-  { 
-    path: '/auth', 
+  {
+    path: '/auth',
     component: Auth,
-    meta: { requiresAuth: false }
+    meta: { requiresAuth: false },
   },
-  { 
-    path: '/history', 
+  {
+    path: '/history',
     component: History,
-    meta: { requiresAuth: true }
+    meta: { requiresAuth: true },
   },
-  { 
-    path: '/dashboard', 
+  {
+    path: '/dashboard',
     component: Dashboard,
-    meta: { requiresAuth: true }
+    meta: { requiresAuth: true },
   },
-  { 
-    path: '/settings', 
+  {
+    path: '/settings',
     component: Settings,
-    meta: { requiresAuth: true }
-  }
+    meta: { requiresAuth: true },
+  },
 ]
 
 // Create Pinia store
 const pinia = createPinia()
 const router = createRouter({
   history: createWebHistory(),
-  routes
+  routes,
 })
 
 // Navigation guard to handle authentication and group setup
 router.beforeEach(async (to, from, next) => {
   // Check if Supabase is configured
   if (!isSupabaseConfigured()) {
-    console.log("Supabase not configured")
+    console.log('Supabase not configured')
     // If not configured and trying to access auth page, allow it
     if (to.path === '/auth') {
       next()
@@ -85,49 +85,48 @@ router.beforeEach(async (to, from, next) => {
     return
   }
 
-
   await useUserStore().fetchUser()
 
   // Check if route requires authentication
   if (to.meta.requiresAuth) {
-    console.log("Route requires auth")
+    console.log('Route requires auth')
     try {
       const user = useUserStore().user
-      console.log("Middleware user", user)
+      console.log('Middleware user', user)
       if (!user) {
         // No user, redirect to auth
-        console.log("No user, redirecting to auth")
+        console.log('No user, redirecting to auth')
         next('/auth')
         return
       }
-      
+
       // User exists, check if they need group setup (except for group-related pages)
       const groupSetupRoutes = ['/groups', '/join-group']
       if (!groupSetupRoutes.includes(to.path)) {
-        console.log("No group setup routes, checking group")
+        console.log('No group setup routes, checking group')
         try {
           const currentGroup = await storage.getCurrentGroup()
           if (!currentGroup) {
             // No group selected, redirect to group setup
-            console.log("No group selected, redirecting to group setup")
+            console.log('No group selected, redirecting to group setup')
             next('/groups')
             return
           }
         } catch (error) {
           console.error('Error checking group:', error)
           // If there's an error checking groups, go to group setup
-          console.log("Error checking group, redirecting to group setup")
+          console.log('Error checking group, redirecting to group setup')
           next('/groups')
           return
         }
       }
-      
+
       // User exists and has group (or is going to groups page), allow navigation
-      console.log("User exists and has group, allowing navigation")
+      console.log('User exists and has group, allowing navigation')
       next()
     } catch (error) {
       console.error('Auth check failed:', error)
-      console.log("Auth check failed, redirecting to auth")
+      console.log('Auth check failed, redirecting to auth')
       next('/auth')
     }
   } else {
@@ -141,29 +140,29 @@ router.beforeEach(async (to, from, next) => {
           try {
             const currentGroup = await storage.getCurrentGroup()
             if (!currentGroup) {
-              console.log("No group selected, redirecting to group setup")
+              console.log('No group selected, redirecting to group setup')
               next('/groups')
               return
             }
             // User has group, redirect to home
-            console.log("User has group, redirecting to home")
+            console.log('User has group, redirecting to home')
             next('/')
             return
-          } catch (error) {
+          } catch {
             // Error checking group, go to group setup
-            console.log("Error checking group, redirecting to group setup")
+            console.log('Error checking group, redirecting to group setup')
             next('/groups')
             return
           }
         }
-      } catch (error) {
-        console.error('Auth check failed:', error)
-        console.log("Auth check failed, redirecting to auth")
+      } catch {
+        console.error('Auth check failed')
+        console.log('Auth check failed, redirecting to auth')
         next('/auth')
       }
     }
     // Allow navigation to non-auth routes
-    console.log("Allowing navigation to non-auth routes")
+    console.log('Allowing navigation to non-auth routes')
     next()
   }
 })
