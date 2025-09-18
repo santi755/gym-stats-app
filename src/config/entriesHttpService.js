@@ -2,31 +2,46 @@ import { supabase, TABLES } from './httpConfig.js'
 
 const TABLE = TABLES.ENTRIES
 
-
 // Entry functions (updated for new member system)
 export async function createEntry(groupId, memberId, date, points = 0) {
-    const { data, error } = await supabase
-      .from(TABLE)
-      .upsert([{ group_id: groupId, member_id: memberId, date, points }])
-      .select()
-      .single()
-    
-    if (error) throw error
-    return data
-  }
-  
-  export async function getGroupEntries(groupId, startDate, endDate) {
-    const { data, error } = await supabase
-      .from(TABLE)
-      .select(`
+  const { data, error } = await supabase
+    .from(TABLE)
+    .upsert([{ group_id: groupId, member_id: memberId, date, points }])
+    .select()
+    .single()
+
+  if (error) throw error
+  return data
+}
+
+export async function deleteEntry(groupId, memberId, date) {
+  const { data, error } = await supabase
+    .from(TABLE)
+    .delete()
+    .eq('group_id', groupId)
+    .eq('member_id', memberId)
+    .eq('date', date)
+    .select()
+    .single()
+
+  if (error) throw error
+  return data
+}
+
+export async function getGroupEntries(groupId, startDate, endDate) {
+  const { data, error } = await supabase
+    .from(TABLE)
+    .select(
+      `
         *,
         group_members(display_name, color, user_id)
-      `)
-      .eq('group_id', groupId)
-      .gte('date', startDate)
-      .lte('date', endDate)
-      .order('date', { ascending: true })
-    
-    if (error) throw error
-    return data
-  }
+      `
+    )
+    .eq('group_id', groupId)
+    .gte('date', startDate)
+    .lte('date', endDate)
+    .order('date', { ascending: true })
+
+  if (error) throw error
+  return data
+}

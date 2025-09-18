@@ -8,9 +8,12 @@ export const useGroupMemberStore = defineStore('groupMember', {
 
   actions: {
     async getGroupMembers(groupId) {
-      console.log('0) getGroupMembers', groupId)
       const members = await getGroupMembers(groupId)
       this.members = members
+    },
+
+    getMemberByUserId(userId) {
+      return this.members.find((member) => member.user_id === userId)
     },
   },
 })

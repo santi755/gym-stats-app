@@ -8,6 +8,8 @@ export const useUserPreferences = defineStore('userPreferences', {
 
   actions: {
     async getUserPreferences(user) {
+      if (this.preferences) return this.preferences
+
       const preferences = await getUserPreferences(user)
       this.preferences = preferences
     },

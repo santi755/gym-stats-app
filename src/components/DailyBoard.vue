@@ -10,10 +10,18 @@
     <div class="card">
       <h3 class="font-semibold mb-3">Mi Entrenamiento de Hoy</h3>
       <div class="flex gap-2">
-        <button @click="markMyself" class="flex-1 btn-primary" :disabled="myPointsToday > 0">
-          {{ myPointsToday > 0 ? '¡Ya registrado!' : '¡Fui al gym!' }}
+        <button
+          @click="markMyself"
+          class="flex-1 btn-primary"
+          :disabled="currentUserHasEnteredToday"
+        >
+          {{ currentUserHasEnteredToday ? '¡Ya registrado!' : '¡Fui al gym!' }}
         </button>
-        <button @click="clearMyPoints" class="flex-1 btn-secondary" :disabled="myPointsToday === 0">
+        <button
+          @click="clearMyPoints"
+          class="flex-1 btn-secondary"
+          :disabled="!currentUserHasEnteredToday"
+        >
           Deshacer
         </button>
       </div>
@@ -39,10 +47,6 @@
         <div>
           <span class="text-blue-700">Presentes:</span>
           <span class="font-semibold text-blue-900 ml-1">{{ presentCount }}</span>
-        </div>
-        <div>
-          <span class="text-blue-700">Total puntos:</span>
-          <span class="font-semibold text-blue-900 ml-1">{{ todayTotal }}</span>
         </div>
       </div>
     </div>
@@ -99,16 +103,17 @@ import { useUserStore } from '@/stores/UserStore.js'
 import { useUserPreferences } from '@/stores/useUserPreferences.js'
 import UserRow from './UserRow.vue'
 import { useGroupMemberStore } from '@/stores/groupMemberStore.js'
+import { useEntryStore } from '@/stores/EntryStore.js'
 
 const router = useRouter()
 const userStore = useUserStore()
 const userPreferences = useUserPreferences()
 const groupMemberStore = useGroupMemberStore()
+const entryStore = useEntryStore()
 const users = ref([])
 const today = ref('')
 const leaderboard = ref([])
 const currentUserId = ref('')
-const myPointsToday = ref(0)
 
 // Computed properties
 const formattedDate = computed(() => {
@@ -121,9 +126,6 @@ const formattedDate = computed(() => {
   })
 })
 
-const presentCount = ref(0)
-const todayTotal = ref(0)
-
 const loadUsers = async () => {
   try {
     // Get user preferences
@@ -131,9 +133,7 @@ const loadUsers = async () => {
 
     const groupId = userPreferences.preferences.current_group_id
     await groupMemberStore.getGroupMembers(groupId)
-    console.log('groupMemberStore.members', groupMemberStore.members)
     users.value = groupMemberStore.members
-    //console.log('users', users.value)
   } catch (error) {
     console.error('Error loading users:', error)
   }
@@ -172,10 +172,13 @@ const loadMyPoints = async () => {
     console.error('Error loading my points:', error)
   }
 }
+*/
 
 const markMyself = async () => {
   try {
-    await storage.setUserPoints(today.value, currentUserId.value, 1)
+    const groupId = userPreferences.preferences.current_group_id
+    const currentMember = groupMemberStore.getMemberByUserId(currentUserId.value)
+    await entryStore.createEntry(groupId, currentMember.id, today.value, 1)
     await refreshData()
   } catch (error) {
     alert('Error al registrar entrenamiento: ' + error.message)
@@ -185,22 +188,36 @@ const markMyself = async () => {
 const clearMyPoints = async () => {
   if (confirm('¿Deshacer tu registro de hoy?')) {
     try {
-      await storage.setUserPoints(today.value, currentUserId.value, 0)
+      const groupId = userPreferences.preferences.current_group_id
+      const currentMember = groupMemberStore.getMemberByUserId(currentUserId.value)
+
+      await entryStore.deleteEntry(groupId, currentMember.id, today.value)
       await refreshData()
     } catch (error) {
       alert('Error al deshacer registro: ' + error.message)
     }
   }
 }
-*/
+
+const refreshData = async () => {
+  await loadUsers()
+}
+
+const currentUserHasEnteredToday = computed(() => {
+  const currentMember = groupMemberStore.getMemberByUserId(currentUserId.value)
+  return currentMember?.has_entered_today
+})
+
+const presentCount = computed(() => {
+  return groupMemberStore.members.filter((member) => member.has_entered_today).length
+})
+
 // Lifecycle
 onMounted(async () => {
   try {
     currentUserId.value = userStore.user.id
-    console.log('currentUserId', currentUserId.value)
     today.value = storage.getTodayKey()
-    await loadUsers()
-
+    await refreshData()
     /*
     await loadLeaderboard()
     await loadMyPoints()
